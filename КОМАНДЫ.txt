@@ -1,0 +1,160 @@
+===========================================
+КОМАНДЫ ДЛЯ ЗАГРУЗКИ И УСТАНОВКИ SUPABASE
+===========================================
+
+=== НА ЛОКАЛЬНОМ КОМПЬЮТЕРЕ (Windows PowerShell) ===
+
+# Перейдите в директорию проекта
+cd C:\path\to\task_tracker
+
+# Загрузите файлы на сервер (выберите один из вариантов):
+
+# Вариант 1: Все файлы одной командой
+scp nginx-supabase.conf docker-compose.supabase.yml kong.yml .env.example setup-supabase.sh generate-jwt.sh monitor-supabase.sh root@185.225.34.252:/opt/supabase/
+
+# Вариант 2: По одному файлу
+scp nginx-supabase.conf root@185.225.34.252:/opt/supabase/
+scp docker-compose.supabase.yml root@185.225.34.252:/opt/supabase/
+scp kong.yml root@185.225.34.252:/opt/supabase/
+scp .env.example root@185.225.34.252:/opt/supabase/
+scp setup-supabase.sh root@185.225.34.252:/opt/supabase/
+scp generate-jwt.sh root@185.225.34.252:/opt/supabase/
+scp monitor-supabase.sh root@185.225.34.252:/opt/supabase/
+
+=== НА СЕРВЕРЕ (SSH) ===
+
+# Подключение к серверу
+ssh root@185.225.34.252
+
+# Создание директории (если не существует)
+mkdir -p /opt/supabase
+cd /opt/supabase
+
+# Проверка загруженных файлов
+ls -la
+
+# Установка прав на выполнение скриптов
+chmod +x setup-supabase.sh generate-jwt.sh monitor-supabase.sh
+
+# Автоматическая установка зависимостей
+sudo bash setup-supabase.sh
+
+# Генерация JWT ключей
+bash generate-jwt.sh
+
+# Создание .env файла
+cp .env.example .env
+nano .env
+# Заполните значениями из jwt-keys.txt
+# Сохраните: Ctrl+X, затем Y, затем Enter
+
+# Обновление docker-compose с ключами
+nano docker-compose.supabase.yml
+# Замените:
+# - your-super-secret-and-long-postgres-password
+# - your-super-secret-jwt-token-with-at-least-32-characters-long
+# Сохраните: Ctrl+X, затем Y, затем Enter
+
+# Создание директорий для данных
+mkdir -p volumes/db/data volumes/storage volumes/kong
+
+# Копирование конфигурации Kong
+cp kong.yml volumes/kong/
+
+# Запуск Supabase
+docker-compose -f docker-compose.supabase.yml up -d
+
+# Проверка статуса контейнеров
+docker-compose -f docker-compose.supabase.yml ps
+
+# Просмотр логов
+docker-compose -f docker-compose.supabase.yml logs -f
+
+# Мониторинг системы
+bash monitor-supabase.sh
+
+=== ПРОВЕРКА РАБОТЫ ===
+
+# Проверка API
+curl https://api.bike53.ru/health
+
+# Проверка портов
+sudo netstat -tulpn | grep -E '8000|54321|54323|54324|54325|54326'
+
+# Проверка SSL сертификатов
+sudo certbot certificates
+
+# Проверка Nginx
+sudo nginx -t
+sudo systemctl status nginx
+
+=== ПОЛЕЗНЫЕ КОМАНДЫ ===
+
+# Перезапуск всех сервисов
+docker-compose -f docker-compose.supabase.yml restart
+
+# Остановка всех сервисов
+docker-compose -f docker-compose.supabase.yml down
+
+# Перезапуск конкретного сервиса
+docker-compose -f docker-compose.supabase.yml restart auth
+
+# Просмотр логов конкретного сервиса
+docker-compose -f docker-compose.supabase.yml logs -f db
+docker-compose -f docker-compose.supabase.yml logs -f auth
+docker-compose -f docker-compose.supabase.yml logs -f rest
+
+# Перезапуск Nginx
+sudo systemctl restart nginx
+
+# Просмотр логов Nginx
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+
+# Обновление SSL сертификатов
+sudo certbot renew
+
+# Бэкап базы данных
+docker exec supabase-db pg_dump -U postgres postgres > backup_$(date +%Y%m%d).sql
+
+# Восстановление из бэкапа
+docker exec -i supabase-db psql -U postgres postgres < backup_20240411.sql
+
+# Подключение к базе данных
+docker exec -it supabase-db psql -U postgres
+
+# Использование ресурсов
+docker stats
+
+# Очистка неиспользуемых ресурсов Docker
+docker system prune -a
+
+=== TROUBLESHOOTING ===
+
+# 502 Bad Gateway
+docker-compose -f docker-compose.supabase.yml ps
+docker-compose -f docker-compose.supabase.yml restart
+sudo tail -f /var/log/nginx/error.log
+
+# SSL ошибки
+sudo certbot certificates
+sudo certbot renew
+
+# База данных не запускается
+docker-compose -f docker-compose.supabase.yml logs db
+
+# Очистка и перезапуск (ВНИМАНИЕ: удалит все данные!)
+docker-compose -f docker-compose.supabase.yml down -v
+rm -rf volumes/db/data/*
+docker-compose -f docker-compose.supabase.yml up -d
+
+=== URLS ===
+
+API: https://api.bike53.ru
+Studio: https://studio.bike53.ru
+REST API: https://api.bike53.ru/rest/v1/
+Auth: https://api.bike53.ru/auth/v1/
+Realtime: https://api.bike53.ru/realtime/v1/
+Storage: https://api.bike53.ru/storage/v1/
+
+===========================================

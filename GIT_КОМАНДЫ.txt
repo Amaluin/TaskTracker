@@ -1,0 +1,278 @@
+============================================
+GIT КОМАНДЫ - БЫСТРАЯ СПРАВКА
+============================================
+
+ИНИЦИАЛИЗАЦИЯ И ПЕРВЫЙ ПУШ
+---------------------------
+
+# 1. Инициализация
+git init
+
+# 2. Добавить все файлы
+git add .
+
+# 3. Первый коммит
+git commit -m "Initial commit: Task Tracker with Supabase"
+
+# 4. Добавить remote (замените YOUR_USERNAME)
+git remote add origin https://github.com/YOUR_USERNAME/task-tracker.git
+
+# 5. Переименовать ветку в main
+git branch -M main
+
+# 6. Запушить
+git push -u origin main
+
+============================================
+ЕЖЕДНЕВНАЯ РАБОТА
+============================================
+
+# Проверить статус
+git status
+
+# Добавить изменения
+git add .
+
+# Коммит
+git commit -m "Описание изменений"
+
+# Пуш
+git push origin main
+
+# Получить изменения
+git pull origin main
+
+============================================
+ПРОВЕРКА ПЕРЕД ПУШЕМ
+============================================
+
+# Что будет закоммичено?
+git status
+
+# Какие изменения?
+git diff
+
+# Убедитесь, что НЕТ в списке:
+# ❌ .env
+# ❌ jwt-keys.txt
+# ❌ volumes/
+# ❌ backups/
+# ❌ Реального Anon Key в constants.dart
+
+============================================
+РАБОТА С ФАЙЛАМИ
+============================================
+
+# Добавить конкретный файл
+git add filename.dart
+
+# Удалить из Git (но не из диска)
+git rm --cached filename
+
+# Отменить изменения
+git checkout -- filename
+
+# Переименовать файл
+git mv oldname newname
+
+============================================
+ВЕТКИ
+============================================
+
+# Посмотреть ветки
+git branch
+
+# Создать ветку
+git branch feature-name
+
+# Переключиться
+git checkout feature-name
+
+# Создать и переключиться
+git checkout -b feature-name
+
+# Слить в main
+git checkout main
+git merge feature-name
+
+# Удалить ветку
+git branch -d feature-name
+
+============================================
+ИСТОРИЯ
+============================================
+
+# Посмотреть историю
+git log
+
+# Краткая история
+git log --oneline
+
+# История с графом
+git log --graph --oneline --all
+
+# Изменения в коммите
+git show COMMIT_HASH
+
+============================================
+ОТМЕНА ИЗМЕНЕНИЙ
+============================================
+
+# Отменить последний коммит (сохранить изменения)
+git reset --soft HEAD~1
+
+# Отменить последний коммит (удалить изменения)
+git reset --hard HEAD~1
+
+# Изменить последний коммит
+git commit --amend -m "Новое сообщение"
+
+# Отменить изменения в файле
+git checkout -- filename
+
+============================================
+УДАЛЕННЫЙ РЕПОЗИТОРИЙ
+============================================
+
+# Посмотреть remote
+git remote -v
+
+# Добавить remote
+git remote add origin URL
+
+# Изменить URL
+git remote set-url origin NEW_URL
+
+# Удалить remote
+git remote remove origin
+
+============================================
+ТЕГИ (РЕЛИЗЫ)
+============================================
+
+# Создать тег
+git tag -a v1.0.0 -m "First release"
+
+# Посмотреть теги
+git tag
+
+# Запушить тег
+git push origin v1.0.0
+
+# Запушить все теги
+git push origin --tags
+
+# Удалить тег
+git tag -d v1.0.0
+git push origin :refs/tags/v1.0.0
+
+============================================
+TROUBLESHOOTING
+============================================
+
+# Ошибка: remote already exists
+git remote remove origin
+git remote add origin URL
+
+# Ошибка: failed to push
+git pull origin main --rebase
+git push origin main
+
+# Случайно закоммитили .env
+git rm --cached .env
+git commit -m "Remove .env"
+git push origin main
+
+# Конфликты при merge
+git status  # Посмотреть конфликты
+# Отредактируйте файлы
+git add .
+git commit -m "Resolve conflicts"
+
+# Отменить merge
+git merge --abort
+
+============================================
+ПОЛЕЗНЫЕ АЛИАСЫ
+============================================
+
+# Добавьте в ~/.gitconfig
+
+[alias]
+    st = status
+    co = checkout
+    br = branch
+    ci = commit
+    unstage = reset HEAD --
+    last = log -1 HEAD
+    visual = log --graph --oneline --all
+
+# Использование:
+git st  # вместо git status
+git co main  # вместо git checkout main
+
+============================================
+GITIGNORE
+============================================
+
+# Проверить, что игнорируется
+git status --ignored
+
+# Проверить конкретный файл
+git check-ignore -v filename
+
+# Очистить кэш (после обновления .gitignore)
+git rm -r --cached .
+git add .
+git commit -m "Update .gitignore"
+
+============================================
+СОЗДАНИЕ РЕПОЗИТОРИЯ НА GITHUB
+============================================
+
+1. Откройте: https://github.com
+2. Нажмите: New repository
+3. Заполните:
+   - Name: task-tracker
+   - Description: Task Tracker Flutter app
+   - Public или Private
+   - НЕ добавляйте README, .gitignore
+4. Create repository
+5. Следуйте инструкциям на экране
+
+============================================
+ЧЕКЛИСТ ПЕРЕД ПУШЕМ
+============================================
+
+✓ git status - проверить файлы
+✓ Нет .env в списке
+✓ Нет jwt-keys.txt в списке
+✓ Нет volumes/ в списке
+✓ Нет реального Anon Key в constants.dart
+✓ git add . - добавить файлы
+✓ git commit -m "..." - коммит
+✓ git push origin main - пуш
+
+============================================
+БЫСТРЫЙ СТАРТ
+============================================
+
+# Полная последовательность:
+
+cd C:\path\to\task_tracker
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/YOUR_USERNAME/task-tracker.git
+git branch -M main
+git push -u origin main
+
+# Готово! Проект на GitHub!
+
+============================================
+ПОДРОБНАЯ ДОКУМЕНТАЦИЯ
+============================================
+
+См. файл: GIT_SETUP.md
+
+============================================

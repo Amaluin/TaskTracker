@@ -1,0 +1,131 @@
+============================================
+БЫСТРАЯ НАСТРОЙКА БАЗЫ ДАННЫХ SUPABASE
+============================================
+
+Шаг 1: Откройте Supabase Studio
+--------------------------------
+URL: https://studio.bike53.ru
+Войдите в админ панель
+
+Шаг 2: Перейдите в SQL Editor
+------------------------------
+1. В левом меню найдите "SQL Editor"
+2. Нажмите "New query"
+
+Шаг 3: Выполните скрипт
+-----------------------
+1. Откройте файл: database_schema.sql
+2. Скопируйте ВСЁ содержимое (Ctrl+A, Ctrl+C)
+3. Вставьте в SQL Editor (Ctrl+V)
+4. Нажмите "Run" или Ctrl+Enter
+5. Дождитесь выполнения (5-10 секунд)
+
+Шаг 4: Проверьте результат
+---------------------------
+Вы должны увидеть сообщение:
+"Схема базы данных успешно создана!"
+Таблицы: 3
+Индексы: 20+
+Функции: 5
+Представления: 3
+
+Шаг 5: Проверьте таблицы
+-------------------------
+1. Перейдите в "Table Editor"
+2. Убедитесь, что созданы таблицы:
+   ✓ tasks
+   ✓ task_reminders
+   ✓ task_status_history
+
+Шаг 6: Получите Anon Key
+-------------------------
+1. Перейдите в "Settings" → "API"
+2. Скопируйте "anon" ключ
+3. Сохраните его - понадобится для Flutter
+
+Шаг 7: Обновите Flutter приложение
+-----------------------------------
+Откройте файл: lib/core/constants.dart
+
+Замените:
+  static const String supabaseUrl = 'YOUR_SUPABASE_URL';
+  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+
+На:
+  static const String supabaseUrl = 'https://api.bike53.ru';
+  static const String supabaseAnonKey = 'ВАШ_ANON_KEY_ИЗ_STUDIO';
+
+Шаг 8: Пересоберите приложение
+-------------------------------
+flutter clean
+flutter pub get
+flutter run
+
+============================================
+ГОТОВО! База данных настроена!
+============================================
+
+Что создано:
+✓ 3 таблицы (tasks, task_reminders, task_status_history)
+✓ 20+ индексов для быстрой работы
+✓ 5 функций и триггеров
+✓ 3 представления (views)
+✓ 2 API функции
+✓ RLS политики безопасности
+
+Тестовые данные (опционально):
+-------------------------------
+Выполните в SQL Editor:
+
+INSERT INTO tasks (user_id, title, description, status, priority, due_at)
+VALUES 
+  ('test-user-1', 'Тестовая задача 1', 'Описание', 'pending', 'high', NOW() + INTERVAL '2 days'),
+  ('test-user-1', 'Тестовая задача 2', 'Описание', 'accepted', 'medium', NOW() + INTERVAL '5 days');
+
+Проверка:
+SELECT * FROM tasks WHERE user_id = 'test-user-1';
+
+Удаление тестовых данных:
+DELETE FROM tasks WHERE user_id = 'test-user-1';
+
+============================================
+ПОЛЕЗНЫЕ ФАЙЛЫ
+============================================
+
+database_schema.sql - Основной скрипт создания БД
+database_queries.sql - Полезные SQL запросы
+DATABASE_SETUP.md - Подробная инструкция
+
+============================================
+TROUBLESHOOTING
+============================================
+
+Ошибка: "relation already exists"
+----------------------------------
+Решение: Удалите существующие таблицы
+
+DROP TABLE IF EXISTS task_status_history CASCADE;
+DROP TABLE IF EXISTS task_reminders CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+
+Затем выполните database_schema.sql снова
+
+Ошибка: "permission denied"
+----------------------------
+Решение: Убедитесь, что вы вошли как владелец проекта
+
+Ошибка: "extension does not exist"
+-----------------------------------
+Решение: Установите расширение
+
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+============================================
+ПОДДЕРЖКА
+============================================
+
+Документация: DATABASE_SETUP.md
+SQL запросы: database_queries.sql
+Supabase Docs: https://supabase.com/docs
+
+============================================

@@ -1,0 +1,137 @@
+============================================
+ШПАРГАЛКА - TASK TRACKER + SUPABASE
+============================================
+
+АДРЕСА
+------
+API:    https://api.bike53.ru
+Studio: https://studio.bike53.ru
+Сервер: 185.225.34.252
+
+БЫСТРАЯ НАСТРОЙКА БД
+--------------------
+1. Откройте: https://studio.bike53.ru
+2. SQL Editor → New query
+3. Скопируйте database_schema.sql
+4. Вставьте и нажмите Run
+5. Settings → API → Скопируйте anon key
+
+ОБНОВЛЕНИЕ FLUTTER
+------------------
+Файл: lib/core/constants.dart
+
+static const String supabaseUrl = 'https://api.bike53.ru';
+static const String supabaseAnonKey = 'ВАШ_ANON_KEY';
+
+Затем:
+flutter clean
+flutter pub get
+flutter run
+
+ПРОВЕРКА API
+------------
+curl https://api.bike53.ru/rest/v1/
+
+ПРОВЕРКА ТАБЛИЦ
+---------------
+Studio → Table Editor
+✓ tasks
+✓ task_reminders
+✓ task_status_history
+
+ТЕСТОВЫЕ ДАННЫЕ
+---------------
+INSERT INTO tasks (user_id, title, description, status, priority, due_at)
+VALUES ('test-user-1', 'Тест', 'Описание', 'pending', 'high', NOW() + INTERVAL '1 day');
+
+SELECT * FROM tasks WHERE user_id = 'test-user-1';
+
+DELETE FROM tasks WHERE user_id = 'test-user-1';
+
+ПОЛЕЗНЫЕ ЗАПРОСЫ
+----------------
+-- Все задачи
+SELECT * FROM tasks ORDER BY created_at DESC;
+
+-- Статистика
+SELECT 
+  COUNT(*) as total,
+  COUNT(*) FILTER (WHERE status = 'pending') as pending,
+  COUNT(*) FILTER (WHERE status = 'accepted') as accepted
+FROM tasks;
+
+-- Просроченные
+SELECT * FROM overdue_tasks;
+
+-- Ближайшие дедлайны
+SELECT * FROM upcoming_tasks;
+
+DOCKER КОМАНДЫ
+--------------
+# Статус
+docker-compose -f docker-compose.supabase.yml ps
+
+# Логи
+docker-compose -f docker-compose.supabase.yml logs -f
+
+# Перезапуск
+docker-compose -f docker-compose.supabase.yml restart
+
+# Остановка
+docker-compose -f docker-compose.supabase.yml down
+
+# Запуск
+docker-compose -f docker-compose.supabase.yml up -d
+
+МОНИТОРИНГ
+----------
+bash monitor-supabase.sh
+
+NGINX
+-----
+# Проверка
+sudo nginx -t
+
+# Перезапуск
+sudo systemctl restart nginx
+
+# Логи
+sudo tail -f /var/log/nginx/error.log
+
+SSL
+---
+# Обновление
+sudo certbot renew
+
+# Проверка
+sudo certbot certificates
+
+БЭКАП БД
+--------
+# Создать
+docker exec supabase-db pg_dump -U postgres postgres > backup.sql
+
+# Восстановить
+docker exec -i supabase-db psql -U postgres postgres < backup.sql
+
+TROUBLESHOOTING
+---------------
+# 502 Bad Gateway
+docker-compose -f docker-compose.supabase.yml restart
+
+# Проверка портов
+sudo netstat -tulpn | grep -E '8000|54321'
+
+# Очистка Docker
+docker system prune -a
+
+ФАЙЛЫ
+-----
+database_schema.sql - Схема БД
+database_queries.sql - SQL запросы
+DATABASE_SETUP.md - Инструкция БД
+ФИНАЛЬНАЯ_НАСТРОЙКА.md - Последние шаги
+SUPABASE_README.md - Полная документация
+КОМАНДЫ.txt - Все команды
+
+============================================
