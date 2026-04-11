@@ -5,6 +5,7 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io' show Platform;
 import '../core/constants.dart';
+import 'web_notification_service.dart' if (dart.library.io) 'web_notification_service_stub.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -38,20 +39,10 @@ class NotificationService {
   }
 
   Future<void> _initializeWeb() async {
-    // Для веба используем браузерные уведомления
-    // Проверяем поддержку
+    // Для веба используем нативный Web Notifications API
     if (kIsWeb) {
-      // Web notifications будут работать через flutter_local_notifications
-      const initSettings = InitializationSettings(
-        linux: LinuxInitializationSettings(
-          defaultActionName: 'Open notification',
-        ),
-      );
-      
-      await _plugin.initialize(
-        initSettings,
-        onDidReceiveNotificationResponse: _onNotificationResponse,
-      );
+      final webService = WebNotificationService();
+      await webService.initialize();
     }
   }
 
@@ -122,25 +113,14 @@ class NotificationService {
     required DateTime scheduledDate,
     String? payload,
   }) async {
-    // Для веба используем простые уведомления без timezone
-    // Браузер сам покажет системное уведомление Windows
-    final details = const NotificationDetails(
-      linux: LinuxNotificationDetails(),
+    // Используем нативный Web Notifications API
+    final webService = WebNotificationService();
+    await webService.scheduleNotification(
+      id: id,
+      title: title,
+      body: body,
+      scheduledDate: scheduledDate,
     );
-
-    // Вычисляем задержку до времени уведомления
-    final delay = scheduledDate.difference(DateTime.now());
-    
-    if (delay.isNegative) {
-      // Если время уже прошло, показываем сразу
-      await _plugin.show(id, title, body, details, payload: payload);
-    } else {
-      // Планируем уведомление через задержку
-      // Для веба используем простой таймер через show с задержкой
-      await Future.delayed(delay, () async {
-        await _plugin.show(id, title, body, details, payload: payload);
-      });
-    }
   }
 
   Future<void> _scheduleMobileNotification({

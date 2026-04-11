@@ -86,28 +86,65 @@ class TasksNotifier extends StateNotifier<AsyncValue<List<TaskModel>>> {
   }
 
   Future<void> updateTask(TaskModel task) async {
+    // Оптимистичное обновление
+    state.whenData((tasks) {
+      final updatedTasks = tasks.map((t) {
+        if (t.id == task.id) {
+          return task;
+        }
+        return t;
+      }).toList();
+      state = AsyncValue.data(updatedTasks);
+    });
+
+    // Отправляем на сервер
     try {
       await _repository.updateTask(task);
-      await loadTasks();
+      // Realtime обновит автоматически
     } catch (e, stack) {
+      // Откатываем при ошибке
+      await loadTasks();
       state = AsyncValue.error(e, stack);
     }
   }
 
   Future<void> deleteTask(String taskId) async {
+    // Оптимистичное удаление
+    state.whenData((tasks) {
+      final updatedTasks = tasks.where((t) => t.id != taskId).toList();
+      state = AsyncValue.data(updatedTasks);
+    });
+
+    // Отправляем на сервер
     try {
       await _repository.deleteTask(taskId);
-      await loadTasks();
+      // Realtime обновит автоматически
     } catch (e, stack) {
+      // Откатываем при ошибке
+      await loadTasks();
       state = AsyncValue.error(e, stack);
     }
   }
 
   Future<void> changeStatus(String taskId, String newStatus) async {
+    // Оптимистичное обновление - сразу обновляем UI
+    state.whenData((tasks) {
+      final updatedTasks = tasks.map((task) {
+        if (task.id == taskId) {
+          return task.copyWith(status: newStatus, updatedAt: DateTime.now());
+        }
+        return task;
+      }).toList();
+      state = AsyncValue.data(updatedTasks);
+    });
+
+    // Затем отправляем запрос на сервер в фоне
     try {
       await _repository.changeStatus(taskId, newStatus);
-      await loadTasks();
+      // Не перезагружаем все задачи - realtime сделает это автоматически
     } catch (e, stack) {
+      // Если ошибка - откатываем изменения
+      await loadTasks();
       state = AsyncValue.error(e, stack);
     }
   }

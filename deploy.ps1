@@ -48,6 +48,15 @@ scp -r build/web/* root@185.225.34.252:/var/www/app.bike53.ru/
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "✓ Загрузка завершена успешно" -ForegroundColor Green
+    
+    # Исправление прав доступа
+    Write-Host ""
+    Write-Host "🔐 Исправление прав доступа..." -ForegroundColor Yellow
+    ssh root@185.225.34.252 "chmod -R 755 /var/www/app.bike53.ru && chown -R www-data:www-data /var/www/app.bike53.ru"
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✓ Права доступа исправлены" -ForegroundColor Green
+    }
     Write-Host ""
     Write-Host "═══════════════════════════════════════" -ForegroundColor Cyan
     Write-Host "🎉 Приложение опубликовано!" -ForegroundColor Green
