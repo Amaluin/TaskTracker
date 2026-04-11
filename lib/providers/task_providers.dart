@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/models/task_model.dart';
 import '../data/repositories/task_repository.dart';
 
@@ -13,9 +14,40 @@ final tasksProvider =
 
 class TasksNotifier extends StateNotifier<AsyncValue<List<TaskModel>>> {
   final TaskRepository _repository;
+  RealtimeChannel? _subscription;
 
   TasksNotifier(this._repository) : super(const AsyncValue.loading()) {
     loadTasks();
+    _setupRealtimeSubscription();
+  }
+
+  void _setupRealtimeSubscription() {
+    final supabase = Supabase.instance.client;
+    
+    _subscription = supabase
+        .channel('tasks_changes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'tasks',
+          callback: (payload) {
+            print('🔄 Realtime event: ${payload.eventType}');
+            print('   New data: ${payload.newRecord}');
+            print('   Old data: ${payload.oldRecord}');
+            // Перезагружаем задачи при любом изменении
+            loadTasks();
+          },
+        )
+        .subscribe();
+    
+    print('✅ Realtime subscription установлена');
+  }
+
+  @override
+  void dispose() {
+    _subscription?.unsubscribe();
+    print('🔌 Realtime subscription отключена');
+    super.dispose();
   }
 
   Future<void> loadTasks({String? status, String? priority}) async {

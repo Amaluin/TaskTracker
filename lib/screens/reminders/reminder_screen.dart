@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../data/models/task_reminder_model.dart';
@@ -23,7 +23,10 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
   @override
   void initState() {
     super.initState();
-    ref.read(remindersProvider.notifier).loadRemindersForTask(widget.taskId);
+    // Загружаем напоминания после построения виджета
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(remindersProvider.notifier).loadRemindersForTask(widget.taskId);
+    });
   }
 
   Future<void> _addReminder() async {
@@ -68,39 +71,62 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
       selectedTime.minute,
     );
 
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString(AppConstants.keyUserId);
-    if (userId == null) return;
+    try {
+      // Получаем ID пользователя из Supabase auth
+      final user = Supabase.instance.client.auth.currentUser;
+      
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка: пользователь не авторизован'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
-    final now = DateTime.now();
-    final reminder = TaskReminderModel(
-      id: const Uuid().v4(),
-      taskId: widget.taskId,
-      userId: userId,
-      remindAt: remindAt,
-      type: _reminderType,
-      enabled: true,
-      createdAt: now,
-    );
-
-    await ref.read(remindersProvider.notifier).addReminder(reminder);
-
-    await NotificationService().scheduleNotification(
-      id: reminder.id.hashCode,
-      title: 'Напоминание о задаче',
-      body:
-          'У вас запланировано напоминание на ${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
-      scheduledDate: remindAt,
-      payload: widget.taskId,
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Напоминание успешно создано'),
-          backgroundColor: Color(0xFF6366F1),
-        ),
+      final userId = user.id;
+      final now = DateTime.now();
+      final reminder = TaskReminderModel(
+        id: const Uuid().v4(),
+        taskId: widget.taskId,
+        userId: userId,
+        remindAt: remindAt,
+        type: _reminderType,
+        enabled: true,
+        createdAt: now,
       );
+
+      await ref.read(remindersProvider.notifier).addReminder(reminder);
+
+      await NotificationService().scheduleNotification(
+        id: reminder.id.hashCode,
+        title: 'Напоминание о задаче',
+        body:
+            'У вас запланировано напоминание на ${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
+        scheduledDate: remindAt,
+        payload: widget.taskId,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Напоминание успешно создано'),
+            backgroundColor: Color(0xFF6366F1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

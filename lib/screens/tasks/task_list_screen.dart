@@ -61,7 +61,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
                 decoration: InputDecoration(
                   hintText: 'Поиск задач...',
                   border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  hintStyle: TextStyle(color: Colors.grey.shade300),
                 ),
                 style: const TextStyle(color: Color(0xFF1F2937)),
                 onChanged: (value) {
@@ -151,10 +151,13 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
             ? TabBar(
                 controller: _tabController,
                 isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 indicatorColor: const Color(0xFF6366F1),
                 labelColor: const Color(0xFF6366F1),
                 unselectedLabelColor: Colors.grey,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+                labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                unselectedLabelStyle: const TextStyle(fontSize: 14),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 12),
                 tabs: AppConstants.allStatuses
                     .map((status) => Tab(text: getStatusDisplayName(status)))
                     .toList(),
@@ -222,35 +225,67 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF6366F1).withOpacity(0.05),
-            const Color(0xFF8B5CF6).withOpacity(0.05),
+            const Color(0xFF6366F1).withValues(alpha: 0.05),
+            const Color(0xFF8B5CF6).withValues(alpha: 0.05),
           ],
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.all(24),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: AppConstants.allStatuses.map((status) {
-            final statusTasks = allTasks.where((t) => t.status == status).toList();
-            return KanbanColumn(
-              status: status,
-              tasks: statusTasks,
-              onTaskTap: (task) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TaskDetailScreen(task: task),
-                  ),
-                );
-              },
-              onStatusChanged: (taskId, newStatus) {
-                ref.read(tasksProvider.notifier).changeStatus(taskId, newStatus);
-              },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Вычисляем ширину колонки с учетом отступов
+          final totalPadding = 24.0 * 2; // padding слева и справа
+          final columnSpacing = 16.0; // отступ между колонками
+          final totalSpacing = columnSpacing * (AppConstants.allStatuses.length - 1);
+          final availableWidth = constraints.maxWidth - totalPadding - totalSpacing;
+          final columnWidth = availableWidth / AppConstants.allStatuses.length;
+          
+          // Минимальная ширина колонки - 280px
+          final clampedWidth = columnWidth.clamp(280.0, double.infinity);
+          
+          // Если колонки не помещаются, делаем горизонтальный скролл
+          final needsScroll = clampedWidth * AppConstants.allStatuses.length + totalSpacing > availableWidth;
+          
+          final columnsRow = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: AppConstants.allStatuses.map((status) {
+              final statusTasks = allTasks.where((t) => t.status == status).toList();
+              return Container(
+                width: clampedWidth,
+                margin: EdgeInsets.only(
+                  right: status != AppConstants.allStatuses.last ? columnSpacing : 0,
+                ),
+                child: KanbanColumn(
+                  status: status,
+                  tasks: statusTasks,
+                  onTaskTap: (task) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TaskDetailScreen(task: task),
+                      ),
+                    );
+                  },
+                  onStatusChanged: (taskId, newStatus) {
+                    ref.read(tasksProvider.notifier).changeStatus(taskId, newStatus);
+                  },
+                ),
+              );
+            }).toList(),
+          );
+          
+          if (needsScroll) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.all(24),
+              child: columnsRow,
             );
-          }).toList(),
-        ),
+          } else {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: columnsRow,
+            );
+          }
+        },
       ),
     );
   }
@@ -264,7 +299,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(

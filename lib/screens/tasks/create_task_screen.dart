@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../data/models/task_model.dart';
 import '../../providers/task_providers.dart';
+import '../../providers/user_providers.dart';
 import '../../widgets/ios_time_picker.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
@@ -21,6 +22,22 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   String _status = AppConstants.statusPending;
   String _priority = AppConstants.priorityMedium;
   DateTime? _dueDate;
+  String? _selectedUserId; // ID выбранного пользователя
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case AppConstants.statusPending:
+        return Icons.pending_outlined;
+      case AppConstants.statusAccepted:
+        return Icons.play_circle_outline;
+      case AppConstants.statusPostponed:
+        return Icons.pause_circle_outline;
+      case AppConstants.statusArchived:
+        return Icons.archive_outlined;
+      default:
+        return Icons.task_alt;
+    }
+  }
 
   @override
   void dispose() {
@@ -45,7 +62,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               surface: Colors.white,
               onSurface: Color(0xFF1F2937),
             ),
-            dialogBackgroundColor: Colors.white,
+            dialogTheme: const DialogThemeData(
+              backgroundColor: Colors.white,
+            ),
           ),
           child: child!,
         );
@@ -74,14 +93,26 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString(AppConstants.keyUserId);
-    if (userId == null) return;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ошибка: пользователь не авторизован'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Используем выбранного пользователя или текущего
+    final assignedUserId = _selectedUserId ?? currentUserId;
 
     final now = DateTime.now();
     final task = TaskModel(
       id: const Uuid().v4(),
-      userId: userId,
+      userId: assignedUserId,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim().isEmpty
           ? null
@@ -160,18 +191,37 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                       children: AppConstants.allStatuses
                           .where((status) => status != AppConstants.statusArchived)
                           .map((status) {
+                        final statusColor = getStatusColor(status);
+                        final isSelected = _status == status;
                         return ChoiceChip(
-                          label: Text(getStatusDisplayName(status)),
-                          selected: _status == status,
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _getStatusIcon(status),
+                                size: 16,
+                                color: isSelected ? statusColor : Colors.grey[600],
+                              ),
+                              const SizedBox(width: 6),
+                              Text(getStatusDisplayName(status)),
+                            ],
+                          ),
+                          selected: isSelected,
                           onSelected: (selected) {
                             setState(() => _status = status);
                           },
-                          selectedColor: const Color(0xFF6366F1).withOpacity(0.2),
-                          side: BorderSide(
-                            color: _status == status
-                                ? const Color(0xFF6366F1)
-                                : Colors.grey.shade300,
+                          selectedColor: statusColor.withValues(alpha: 0.2),
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: isSelected ? statusColor : Colors.grey[700],
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                           ),
+                          side: BorderSide(
+                            color: isSelected ? statusColor : Colors.grey.shade300,
+                            width: isSelected ? 2 : 1,
+                          ),
+                          elevation: isSelected ? 2 : 0,
+                          shadowColor: statusColor.withValues(alpha: 0.3),
                         );
                       }).toList(),
                     ),
@@ -189,30 +239,215 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                       runSpacing: 8,
                       children: AppConstants.allPriorities.map((priority) {
                         Color priorityColor;
+                        IconData priorityIcon;
                         switch (priority) {
                           case AppConstants.priorityHigh:
                             priorityColor = Colors.red;
+                            priorityIcon = Icons.arrow_upward;
                             break;
                           case AppConstants.priorityMedium:
                             priorityColor = Colors.orange;
+                            priorityIcon = Icons.remove;
                             break;
                           default:
                             priorityColor = Colors.green;
+                            priorityIcon = Icons.arrow_downward;
                         }
+                        final isSelected = _priority == priority;
                         return ChoiceChip(
-                          label: Text(getPriorityDisplayName(priority)),
-                          selected: _priority == priority,
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                priorityIcon,
+                                size: 16,
+                                color: isSelected ? priorityColor : Colors.grey[600],
+                              ),
+                              const SizedBox(width: 6),
+                              Text(getPriorityDisplayName(priority)),
+                            ],
+                          ),
+                          selected: isSelected,
                           onSelected: (selected) {
                             setState(() => _priority = priority);
                           },
-                          selectedColor: priorityColor.withOpacity(0.2),
-                          side: BorderSide(
-                            color: _priority == priority
-                                ? priorityColor
-                                : Colors.grey.shade300,
+                          selectedColor: priorityColor.withValues(alpha: 0.2),
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(
+                            color: isSelected ? priorityColor : Colors.grey[700],
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                           ),
+                          side: BorderSide(
+                            color: isSelected ? priorityColor : Colors.grey.shade300,
+                            width: isSelected ? 2 : 1,
+                          ),
+                          elevation: isSelected ? 2 : 0,
+                          shadowColor: priorityColor.withValues(alpha: 0.3),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Назначить на',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final usersAsync = ref.watch(allUsersProvider);
+                        final currentUserAsync = ref.watch(currentUserProvider);
+
+                        return usersAsync.when(
+                          data: (users) {
+                            final currentUser = currentUserAsync.value;
+                            final currentUserId = currentUser?.id;
+
+                            print('🔍 Загружено пользователей: ${users.length}');
+                            print('🔍 Текущий пользователь ID: $currentUserId');
+                            print('🔍 Выбранный пользователь ID: $_selectedUserId');
+
+                            // Если список пользователей пуст, показываем предупреждение
+                            if (users.isEmpty) {
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.orange.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'Не удалось загрузить пользователей. Задача будет назначена на вас.',
+                                        style: TextStyle(color: Colors.orange[700]),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            // Если пользователь не выбран, выбираем текущего
+                            if (_selectedUserId == null && currentUserId != null) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) {
+                                  setState(() {
+                                    _selectedUserId = currentUserId;
+                                  });
+                                  print('✅ Автоматически выбран текущий пользователь: $currentUserId');
+                                }
+                              });
+                            }
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.8),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _selectedUserId,
+                                  isExpanded: true,
+                                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF6366F1)),
+                                  hint: const Text('Выберите пользователя'),
+                                  items: users.map((user) {
+                                    final isCurrentUser = user.id == currentUserId;
+                                    return DropdownMenuItem<String>(
+                                      value: user.id,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.person,
+                                            size: 20,
+                                            color: isCurrentUser 
+                                                ? const Color(0xFF6366F1) 
+                                                : Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              isCurrentUser 
+                                                  ? '${user.displayText} (Я)'
+                                                  : user.displayText,
+                                              style: TextStyle(
+                                                fontWeight: isCurrentUser 
+                                                    ? FontWeight.w600 
+                                                    : FontWeight.normal,
+                                                color: isCurrentUser
+                                                    ? const Color(0xFF6366F1)
+                                                    : const Color(0xFF1F2937),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedUserId = value;
+                                    });
+                                    print('✅ Выбран пользователь: $value');
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                          loading: () => Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: const Row(
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF6366F1),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text('Загрузка пользователей...'),
+                              ],
+                            ),
+                          ),
+                          error: (error, stack) {
+                            print('❌ Ошибка в UI: $error');
+                            return Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.orange.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Не удалось загрузить пользователей. Задача будет назначена на вас.',
+                                      style: TextStyle(color: Colors.orange[700]),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -229,7 +464,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.8),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(color: Colors.grey.shade200),
                         ),
@@ -272,7 +507,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -5),
                 ),

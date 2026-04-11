@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../data/models/task_model.dart';
 import '../../data/models/task_reminder_model.dart';
 import '../../providers/task_providers.dart';
 import '../../providers/reminder_providers.dart';
+import '../../providers/user_providers.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/ios_time_picker.dart';
-import '../../widgets/assign_user_dialog.dart';
 import '../../widgets/postpone_dialog.dart';
 import '../reminders/reminder_screen.dart';
 
@@ -29,6 +29,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   late String _priority;
   DateTime? _dueDate;
   bool _isEditing = false;
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case AppConstants.statusPending:
+        return Icons.pending_outlined;
+      case AppConstants.statusAccepted:
+        return Icons.play_circle_outline;
+      case AppConstants.statusPostponed:
+        return Icons.pause_circle_outline;
+      case AppConstants.statusArchived:
+        return Icons.archive_outlined;
+      default:
+        return Icons.task_alt;
+    }
+  }
 
   @override
   void initState() {
@@ -109,48 +124,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     });
   }
 
-  Future<void> _assignUser() async {
-    final result = await showAssignUserDialog(
-      context,
-      currentAssignedName: widget.task.assignedToUserName,
-    );
-
-    if (result != null) {
-      if (result == 'remove') {
-        // Снять ответственного
-        final updatedTask = widget.task.copyWith(
-          assignedToUserId: '',
-          assignedToUserName: '',
-        );
-        await ref.read(tasksProvider.notifier).updateTask(updatedTask);
-      } else {
-        // Назначить ответственного
-        final assignedUserId = const Uuid().v4(); // В реальном приложении это ID из базы
-        
-        final updatedTask = widget.task.copyWith(
-          assignedToUserId: assignedUserId,
-          assignedToUserName: result,
-        );
-        await ref.read(tasksProvider.notifier).updateTask(updatedTask);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Задача назначена пользователю $result'),
-              backgroundColor: const Color(0xFF6366F1),
-            ),
-          );
-        }
-      }
-    }
-  }
-
   Future<void> _acceptTask() async {
     // Принять задачу и создать напоминание
-    final prefs = await SharedPreferences.getInstance();
-    final currentUserId = prefs.getString(AppConstants.keyUserId);
+    final user = Supabase.instance.client.auth.currentUser;
     
-    if (currentUserId == null) return;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ошибка: пользователь не авторизован'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     // Обновляем статус на "В работе"
     final updatedTask = widget.task.copyWith(
@@ -163,7 +151,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       final reminder = TaskReminderModel(
         id: const Uuid().v4(),
         taskId: widget.task.id,
-        userId: currentUserId,
+        userId: user.id,
         remindAt: widget.task.dueAt!.subtract(const Duration(hours: 1)),
         type: AppConstants.reminderTypeNotification,
         enabled: true,
@@ -195,10 +183,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final postponeUntil = await showPostponeDialog(context);
 
     if (postponeUntil != null) {
-      final prefs = await SharedPreferences.getInstance();
-      final currentUserId = prefs.getString(AppConstants.keyUserId);
+      final user = Supabase.instance.client.auth.currentUser;
       
-      if (currentUserId == null) return;
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка: пользователь не авторизован'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
       // Обновляем задачу
       final updatedTask = widget.task.copyWith(
@@ -211,7 +208,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       final reminder = TaskReminderModel(
         id: const Uuid().v4(),
         taskId: widget.task.id,
-        userId: currentUserId,
+        userId: user.id,
         remindAt: postponeUntil,
         type: AppConstants.reminderTypeNotification,
         enabled: true,
@@ -288,21 +285,30 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         ),
         actions: [
           if (!_isEditing) ...[
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: _openReminders,
-              tooltip: 'Напоминания',
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: _openReminders,
+                tooltip: 'Напоминания',
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => setState(() => _isEditing = true),
-              tooltip: 'Редактировать',
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => setState(() => _isEditing = true),
+                tooltip: 'Редактировать',
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: _deleteTask,
-              tooltip: 'Удалить',
-              color: Colors.red,
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: _deleteTask,
+                tooltip: 'Удалить',
+                color: Colors.red,
+              ),
             ),
           ] else ...[
             TextButton(
@@ -469,19 +475,42 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           spacing: 8,
           runSpacing: 8,
           children: AppConstants.allStatuses.map((status) {
+            final statusColor = getStatusColor(status);
             final isSelected = _status == status;
             return ChoiceChip(
-              label: Text(getStatusDisplayName(status)),
-              selected: isSelected,
-              onSelected: _isEditing
-                  ? (selected) => setState(() => _status = status)
-                  : null,
-              selectedColor: const Color(0xFF6366F1).withOpacity(0.2),
-              side: BorderSide(
-                color: isSelected
-                    ? const Color(0xFF6366F1)
-                    : Colors.grey.shade300,
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _getStatusIcon(status),
+                    size: 16,
+                    color: isSelected ? statusColor : Colors.grey[600],
+                  ),
+                  const SizedBox(width: 6),
+                  Text(getStatusDisplayName(status)),
+                ],
               ),
+              selected: isSelected,
+              onSelected: (selected) async {
+                if (selected && _status != status) {
+                  setState(() => _status = status);
+                  // Автоматически сохраняем изменение статуса
+                  final updatedTask = widget.task.copyWith(status: status);
+                  await ref.read(tasksProvider.notifier).updateTask(updatedTask);
+                }
+              },
+              selectedColor: statusColor.withValues(alpha: 0.2),
+              backgroundColor: Colors.white,
+              labelStyle: TextStyle(
+                color: isSelected ? statusColor : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              side: BorderSide(
+                color: isSelected ? statusColor : Colors.grey.shade300,
+                width: isSelected ? 2 : 1,
+              ),
+              elevation: isSelected ? 2 : 0,
+              shadowColor: statusColor.withValues(alpha: 0.3),
             );
           }).toList(),
         ),
@@ -507,26 +536,54 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           children: AppConstants.allPriorities.map((priority) {
             final isSelected = _priority == priority;
             Color priorityColor;
+            IconData priorityIcon;
             switch (priority) {
               case AppConstants.priorityHigh:
                 priorityColor = Colors.red;
+                priorityIcon = Icons.arrow_upward;
                 break;
               case AppConstants.priorityMedium:
                 priorityColor = Colors.orange;
+                priorityIcon = Icons.remove;
                 break;
               default:
                 priorityColor = Colors.green;
+                priorityIcon = Icons.arrow_downward;
             }
             return ChoiceChip(
-              label: Text(getPriorityDisplayName(priority)),
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    priorityIcon,
+                    size: 16,
+                    color: isSelected ? priorityColor : Colors.grey[600],
+                  ),
+                  const SizedBox(width: 6),
+                  Text(getPriorityDisplayName(priority)),
+                ],
+              ),
               selected: isSelected,
-              onSelected: _isEditing
-                  ? (selected) => setState(() => _priority = priority)
-                  : null,
-              selectedColor: priorityColor.withOpacity(0.2),
+              onSelected: (selected) async {
+                if (selected && _priority != priority) {
+                  setState(() => _priority = priority);
+                  // Автоматически сохраняем изменение приоритета
+                  final updatedTask = widget.task.copyWith(priority: priority);
+                  await ref.read(tasksProvider.notifier).updateTask(updatedTask);
+                }
+              },
+              selectedColor: priorityColor.withValues(alpha: 0.2),
+              backgroundColor: Colors.white,
+              labelStyle: TextStyle(
+                color: isSelected ? priorityColor : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
               side: BorderSide(
                 color: isSelected ? priorityColor : Colors.grey.shade300,
+                width: isSelected ? 2 : 1,
               ),
+              elevation: isSelected ? 2 : 0,
+              shadowColor: priorityColor.withValues(alpha: 0.3),
             );
           }).toList(),
         ),
@@ -625,59 +682,152 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.8),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.person,
-                  color: Color(0xFF6366F1),
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  widget.task.assignedToUserName ?? 'Не назначен',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: widget.task.assignedToUserName != null
-                        ? const Color(0xFF1F2937)
-                        : Colors.grey[600],
+        Consumer(
+          builder: (context, ref, child) {
+            final usersAsync = ref.watch(allUsersProvider);
+            final currentUserAsync = ref.watch(currentUserProvider);
+
+            return usersAsync.when(
+              data: (users) {
+                final currentUser = currentUserAsync.value;
+                final currentUserId = currentUser?.id;
+
+                // Преобразуем пустую строку в null для дропдауна
+                final assignedUserId = widget.task.assignedToUserId?.isEmpty ?? true
+                    ? null
+                    : widget.task.assignedToUserId;
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      value: assignedUserId,
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF6366F1)),
+                      hint: const Row(
+                        children: [
+                          Icon(Icons.person_outline, color: Colors.grey, size: 20),
+                          SizedBox(width: 12),
+                          Text('Выберите ответственного'),
+                        ],
+                      ),
+                      items: users.map((user) {
+                        final isCurrentUser = user.id == currentUserId;
+                        return DropdownMenuItem<String?>(
+                          value: user.id,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.person,
+                                size: 20,
+                                color: isCurrentUser 
+                                    ? const Color(0xFF6366F1) 
+                                    : Colors.grey[600],
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  isCurrentUser 
+                                      ? '${user.displayText} (Я)'
+                                      : user.displayText,
+                                  style: TextStyle(
+                                    fontWeight: isCurrentUser 
+                                        ? FontWeight.w600 
+                                        : FontWeight.normal,
+                                    color: isCurrentUser
+                                        ? const Color(0xFF6366F1)
+                                        : const Color(0xFF1F2937),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: _isEditing ? null : (String? newUserId) async {
+                        if (newUserId == null) return;
+                        
+                        // Находим имя пользователя
+                        final user = users.firstWhere((u) => u.id == newUserId);
+                        final userName = user.displayText;
+
+                        // Обновляем задачу
+                        final updatedTask = widget.task.copyWith(
+                          assignedToUserId: newUserId,
+                          assignedToUserName: userName,
+                        );
+                        await ref.read(tasksProvider.notifier).updateTask(updatedTask);
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Задача назначена пользователю $userName'),
+                              backgroundColor: const Color(0xFF6366F1),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                );
+              },
+              loading: () => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Text('Загрузка пользователей...'),
+                  ],
                 ),
               ),
-              if (!_isEditing)
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 20),
-                  onPressed: _assignUser,
-                  color: const Color(0xFF6366F1),
-                  tooltip: 'Изменить ответственного',
+              error: (error, stack) => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-            ],
-          ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, color: Colors.grey, size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      widget.task.assignedToUserName ?? 'Не назначен',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
         if (widget.task.postponedUntil != null) ...[
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF8B5CF6).withOpacity(0.1),
+              color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
               ),
             ),
             child: Row(
@@ -776,7 +926,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             TextButton.icon(
               onPressed: _openReminders,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Добавить'),
+              label: const Text('Управление'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF6366F1),
+              ),
             ),
           ],
         ),
@@ -788,45 +941,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               data: (reminders) {
                 final taskReminders = reminders
                     .where((r) => r.taskId == widget.task.id)
-                    .toList();
+                    .toList()
+                  ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+                
                 if (taskReminders.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.notifications_none, color: Colors.grey[600]),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Напоминания не установлены',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return Column(
-                  children: taskReminders.map((reminder) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
+                  return InkWell(
+                    onTap: _openReminders,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(
+                          color: Colors.grey.shade300,
+                          style: BorderStyle.solid,
+                        ),
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            reminder.enabled
-                                ? Icons.notifications_active
-                                : Icons.notifications_off,
-                            color: reminder.enabled
-                                ? const Color(0xFF6366F1)
-                                : Colors.grey,
+                            Icons.notifications_none,
+                            color: Colors.grey[600],
+                            size: 24,
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -834,31 +971,246 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${reminder.remindAt.day}.${reminder.remindAt.month}.${reminder.remindAt.year} в ${reminder.remindAt.hour}:${reminder.remindAt.minute.toString().padLeft(2, '0')}',
-                                  style: const TextStyle(
+                                  'Напоминания не установлены',
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
                                 Text(
-                                  reminder.type,
+                                  'Нажмите, чтобы добавить',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey[600],
+                                    color: Colors.grey[500],
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: Colors.grey[400],
+                          ),
                         ],
+                      ),
+                    ),
+                  );
+                }
+                
+                return Column(
+                  children: taskReminders.map((reminder) {
+                    final isUpcoming = reminder.remindAt.isAfter(DateTime.now());
+                    final isPast = !isUpcoming;
+                    final timeUntil = reminder.remindAt.difference(DateTime.now());
+                    
+                    String timeText;
+                    if (isPast) {
+                      timeText = 'Прошло';
+                    } else if (timeUntil.inMinutes < 60) {
+                      timeText = 'Через ${timeUntil.inMinutes} мин';
+                    } else if (timeUntil.inHours < 24) {
+                      timeText = 'Через ${timeUntil.inHours} ч';
+                    } else {
+                      timeText = 'Через ${timeUntil.inDays} дн';
+                    }
+                    
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: reminder.enabled && isUpcoming
+                              ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                              : Colors.grey.shade300,
+                          width: reminder.enabled && isUpcoming ? 2 : 1,
+                        ),
+                        boxShadow: reminder.enabled && isUpcoming
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _openReminders,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: reminder.enabled && isUpcoming
+                                        ? const Color(0xFF6366F1).withValues(alpha: 0.1)
+                                        : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    reminder.enabled
+                                        ? (isUpcoming
+                                            ? Icons.notifications_active
+                                            : Icons.notifications)
+                                        : Icons.notifications_off,
+                                    color: reminder.enabled && isUpcoming
+                                        ? const Color(0xFF6366F1)
+                                        : Colors.grey,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              '${reminder.remindAt.day}.${reminder.remindAt.month}.${reminder.remindAt.year} в ${reminder.remindAt.hour}:${reminder.remindAt.minute.toString().padLeft(2, '0')}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                color: isPast
+                                                    ? Colors.grey[600]
+                                                    : const Color(0xFF1F2937),
+                                                decoration: isPast
+                                                    ? TextDecoration.lineThrough
+                                                    : null,
+                                              ),
+                                            ),
+                                          ),
+                                          if (isUpcoming && reminder.enabled) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                timeText,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF6366F1),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            reminder.type == 'alarm'
+                                                ? Icons.alarm
+                                                : Icons.notifications_outlined,
+                                            size: 14,
+                                            color: Colors.grey[600],
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            reminder.type == 'alarm'
+                                                ? 'Будильник'
+                                                : 'Уведомление',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          if (!reminder.enabled) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade200,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                'Выключено',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.grey[600],
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 14,
+                                  color: Colors.grey[400],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
                 );
               },
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+              loading: () => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Text('Загрузка напоминаний...'),
+                  ],
+                ),
               ),
-              error: (e, s) => Text('Ошибка: $e'),
+              error: (e, s) => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red[700]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Ошибка загрузки: $e',
+                        style: TextStyle(color: Colors.red[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         ),

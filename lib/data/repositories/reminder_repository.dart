@@ -1,19 +1,25 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/constants.dart';
 import '../models/task_reminder_model.dart';
 
 class ReminderRepository {
   final SupabaseClient _client = Supabase.instance.client;
 
   Future<String?> _getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(AppConstants.keyUserId);
+    // Сначала пробуем получить ID из Supabase auth
+    final user = _client.auth.currentUser;
+    if (user != null) {
+      return user.id;
+    }
+    
+    // Если пользователь не авторизован через Supabase, возвращаем null
+    return null;
   }
 
   Future<List<TaskReminderModel>> getRemindersForTask(String taskId) async {
     final userId = await _getUserId();
-    if (userId == null) throw Exception('User not identified');
+    if (userId == null || userId.isEmpty) {
+      throw Exception('Пользователь не авторизован. Пожалуйста, войдите в систему.');
+    }
 
     final data = await _client
         .from('task_reminders')
@@ -26,7 +32,9 @@ class ReminderRepository {
 
   Future<List<TaskReminderModel>> getAllReminders() async {
     final userId = await _getUserId();
-    if (userId == null) throw Exception('User not identified');
+    if (userId == null || userId.isEmpty) {
+      throw Exception('Пользователь не авторизован. Пожалуйста, войдите в систему.');
+    }
 
     final data = await _client
         .from('task_reminders')

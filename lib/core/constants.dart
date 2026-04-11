@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class AppConstants {
   static const String appName = 'Планировщик задач';
 
@@ -5,7 +7,7 @@ class AppConstants {
   // ВАЖНО: Получите Anon Key из Supabase Studio (https://studio.bike53.ru)
   // Settings → API → anon key
   static const String supabaseUrl = 'https://api.bike53.ru';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY'; // Замените на ваш Anon Key из Studio
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc1NDIyODAwLCJleHAiOjE5MzMxODkyMDB9.9Hsb4zE3uIMR3sXjAPVqdx82-ewpdw2eJTDxE1D_z0Q'; // Замените на ваш Anon Key из Studio
 
   // Task statuses
   static const String statusPending = 'pending';
@@ -66,5 +68,37 @@ String getPriorityDisplayName(String priority) {
       return 'Высокий';
     default:
       return priority;
+  }
+}
+
+// Цвета для статусов
+Color getStatusColor(String status) {
+  switch (status) {
+    case AppConstants.statusPending:
+      return const Color(0xFFF59E0B); // Amber - янтарный
+    case AppConstants.statusAccepted:
+      return const Color(0xFF10B981); // Green - зеленый (в работе)
+    case AppConstants.statusPostponed:
+      return const Color(0xFF8B5CF6); // Purple - фиолетовый
+    case AppConstants.statusArchived:
+      return const Color(0xFF6B7280); // Gray - серый
+    default:
+      return const Color(0xFF9CA3AF);
+  }
+}
+
+// Фоновые цвета для статусов (более светлые)
+Color getStatusBackgroundColor(String status) {
+  switch (status) {
+    case AppConstants.statusPending:
+      return const Color(0xFFFFFBEB); // Very Light Amber
+    case AppConstants.statusAccepted:
+      return const Color(0xFFECFDF5); // Very Light Green
+    case AppConstants.statusPostponed:
+      return const Color(0xFFF5F3FF); // Very Light Purple
+    case AppConstants.statusArchived:
+      return const Color(0xFFFAFAFA); // Very Light Gray
+    default:
+      return const Color(0xFFFDFDFD);
   }
 }

@@ -1,0 +1,232 @@
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║   🔍 ДИАГНОСТИКА ЧЕРЕЗ SSH                               ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+Ошибка 500 всё ещё есть. Нужно посмотреть логи на сервере.
+
+═══════════════════════════════════════════════════════════
+ШАГ 1: ПОДКЛЮЧИТЬСЯ К СЕРВЕРУ
+═══════════════════════════════════════════════════════════
+
+ssh user@185.225.34.252
+
+═══════════════════════════════════════════════════════════
+ШАГ 2: ПРОВЕРИТЬ ЗАПУЩЕННЫЕ КОНТЕЙНЕРЫ
+═══════════════════════════════════════════════════════════
+
+docker ps
+
+Должны быть запущены:
+  ✓ supabase-db (PostgreSQL)
+  ✓ supabase-auth (GoTrue)
+  ✓ kong-gateway
+  ✓ supabase-rest (PostgREST)
+  ✓ supabase-studio
+
+Если auth НЕ запущен:
+  → Проблема в конфигурации .env
+  → Смотрите логи: docker logs supabase-auth
+
+═══════════════════════════════════════════════════════════
+ШАГ 3: ПОСМОТРЕТЬ ЛОГИ AUTH
+═══════════════════════════════════════════════════════════
+
+# Последние 50 строк логов
+docker logs --tail 50 supabase-auth
+
+# Следить за логами в реальном времени
+docker logs -f supabase-auth
+
+Ищите ошибки типа:
+  ✗ "database connection failed"
+  ✗ "table does not exist"
+  ✗ "permission denied"
+  ✗ "invalid JWT secret"
+
+СКОПИРУЙТЕ ТЕКСТ ОШИБКИ И СООБЩИТЕ МНЕ!
+
+═══════════════════════════════════════════════════════════
+ШАГ 4: ПРОВЕРИТЬ БАЗУ ДАННЫХ
+═══════════════════════════════════════════════════════════
+
+# Подключиться к PostgreSQL
+docker exec -it supabase-db psql -U postgres
+
+# Проверить таблицу user_profiles
+\dt user_profiles
+
+# Если таблицы НЕТ:
+\q
+# Примените ПОЛНАЯ_ПЕРЕСБОРКА.sql через Studio
+
+# Если таблица ЕСТЬ:
+SELECT * FROM user_profiles LIMIT 1;
+\q
+
+═══════════════════════════════════════════════════════════
+ШАГ 5: ПРОВЕРИТЬ .ENV ФАЙЛ
+═══════════════════════════════════════════════════════════
+
+# Найти .env файл
+find / -name ".env" -path "*/supabase/*" 2>/dev/null
+
+# Посмотреть содержимое (замените путь)
+cat /path/to/supabase/.env | grep GOTRUE
+
+Должны быть:
+  GOTRUE_SITE_URL=https://api.bike53.ru
+  GOTRUE_DISABLE_SIGNUP=false
+  GOTRUE_MAILER_AUTOCONFIRM=true
+  GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+
+Если чего-то нет - добавьте и перезапустите:
+  docker-compose restart auth
+
+═══════════════════════════════════════════════════════════
+ШАГ 6: ПРОВЕРИТЬ KONG КОНФИГУРАЦИЮ
+═══════════════════════════════════════════════════════════
+
+# Логи Kong
+docker logs --tail 50 kong-gateway
+
+# Проверить маршруты Kong
+docker exec kong-gateway kong routes list
+
+Должен быть маршрут для /auth/v1
+
+═══════════════════════════════════════════════════════════
+ШАГ 7: ТЕСТ AUTH НАПРЯМУЮ
+═══════════════════════════════════════════════════════════
+
+# Проверить health endpoint напрямую (внутри сервера)
+curl http://localhost:9999/health
+
+Должно вернуть:
+  {"version":"...","name":"GoTrue"}
+
+Если ошибка:
+  → Auth сервис не работает
+  → Смотрите логи: docker logs supabase-auth
+
+# Проверить через Kong
+curl http://localhost:8000/auth/v1/health
+
+Если ошибка:
+  → Kong не проксирует Auth
+  → Проверьте kong.yml
+
+# Проверить через Nginx
+curl https://api.bike53.ru/auth/v1/health
+
+Если ошибка:
+  → Nginx не проксирует Kong
+  → Проверьте nginx конфигурацию
+
+═══════════════════════════════════════════════════════════
+ШАГ 8: ПОПРОБОВАТЬ РЕГИСТРАЦИЮ ЧЕРЕЗ CURL
+═══════════════════════════════════════════════════════════
+
+curl -X POST https://api.bike53.ru/auth/v1/signup \
+  -H "Content-Type: application/json" \
+  -H "apikey: YOUR_ANON_KEY" \
+  -d '{
+    "email": "79116352787@tasktracker.local",
+    "password": "qweasd",
+    "data": {
+      "phone": "+79116352787",
+      "name": "Vv",
+      "display_name": "Vv"
+    }
+  }'
+
+Замените YOUR_ANON_KEY на ваш Anon Key из .env
+
+Если ошибка - скопируйте ответ и сообщите мне!
+
+═══════════════════════════════════════════════════════════
+ЧАСТЫЕ ПРОБЛЕМЫ И РЕШЕНИЯ
+═══════════════════════════════════════════════════════════
+
+ПРОБЛЕМА: "table user_profiles does not exist"
+РЕШЕНИЕ:
+  1. Откройте https://studio.bike53.ru
+  2. SQL Editor → New query
+  3. Примените ПОЛНАЯ_ПЕРЕСБОРКА.sql
+
+ПРОБЛЕМА: "permission denied for schema auth"
+РЕШЕНИЕ:
+  В PostgreSQL выполните:
+  GRANT USAGE ON SCHEMA auth TO postgres;
+  GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres;
+
+ПРОБЛЕМА: "invalid JWT secret"
+РЕШЕНИЕ:
+  1. Сгенерируйте новый JWT secret:
+     openssl rand -base64 32
+  2. Обновите в .env:
+     JWT_SECRET=новый_секрет
+     GOTRUE_JWT_SECRET=новый_секрет
+  3. Перезапустите: docker-compose restart
+
+ПРОБЛЕМА: "database connection failed"
+РЕШЕНИЕ:
+  Проверьте DATABASE_URL в .env:
+  DATABASE_URL=postgresql://postgres:пароль@db:5432/postgres
+
+═══════════════════════════════════════════════════════════
+КОМАНДЫ ДЛЯ БЫСТРОЙ ДИАГНОСТИКИ (КОПИРУЙТЕ)
+═══════════════════════════════════════════════════════════
+
+# Проверить все контейнеры
+docker ps -a
+
+# Логи всех сервисов
+docker-compose logs --tail 20
+
+# Перезапустить всё
+docker-compose restart
+
+# Остановить и запустить заново
+docker-compose down
+docker-compose up -d
+
+# Проверить Auth
+curl http://localhost:9999/health
+
+# Проверить Kong
+curl http://localhost:8000/auth/v1/health
+
+# Проверить Nginx
+curl https://api.bike53.ru/auth/v1/health
+
+═══════════════════════════════════════════════════════════
+ЧТО МНЕ НУЖНО ОТ ВАС
+═══════════════════════════════════════════════════════════
+
+Выполните эти команды и пришлите результаты:
+
+1. docker ps
+   → Список запущенных контейнеров
+
+2. docker logs --tail 50 supabase-auth
+   → Логи Auth сервиса
+
+3. curl http://localhost:9999/health
+   → Проверка Auth напрямую
+
+4. cat .env | grep GOTRUE
+   → Настройки Auth
+
+С этой информацией я смогу точно определить проблему!
+
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║  🚀 ГЛАВНОЕ: ПОСМОТРИТЕ ЛОГИ AUTH СЕРВИСА                ║
+║                                                           ║
+║  docker logs --tail 50 supabase-auth                     ║
+║                                                           ║
+║  Там будет точная причина ошибки 500!                    ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝

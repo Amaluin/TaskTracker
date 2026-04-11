@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/constants.dart';
+import 'core/responsive_sizes.dart';
 import 'services/notification_service.dart';
-import 'screens/auth/name_entry_screen.dart';
+import 'screens/auth/login_screen.dart';
 import 'screens/tasks/task_list_screen.dart';
 import 'screens/tasks/create_task_screen.dart';
 import 'screens/settings/settings_screen.dart';
@@ -28,6 +29,11 @@ class TaskTrackerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Адаптивные размеры для веба
+    final isWeb = kIsWeb;
+    final baseFontSize = isWeb ? 18.0 : 14.0;
+    final titleFontSize = isWeb ? 26.0 : 20.0;
+    
     return MaterialApp(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
@@ -51,19 +57,22 @@ class TaskTrackerApp extends StatelessWidget {
         cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(isWeb ? 24 : 20),
           ),
-          color: Colors.white.withOpacity(0.7),
+          color: Colors.white.withValues(alpha: 0.7),
         ),
-        appBarTheme: const AppBarTheme(
+        appBarTheme: AppBarTheme(
           centerTitle: true,
           elevation: 0,
           backgroundColor: Colors.transparent,
-          foregroundColor: Color(0xFF1F2937),
+          foregroundColor: const Color(0xFF1F2937),
           titleTextStyle: TextStyle(
-            color: Color(0xFF1F2937),
-            fontSize: 20,
+            color: const Color(0xFF1F2937),
+            fontSize: titleFontSize,
             fontWeight: FontWeight.w600,
+          ),
+          iconTheme: IconThemeData(
+            size: isWeb ? 28 : 24,
           ),
         ),
         floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -71,45 +80,97 @@ class TaskTrackerApp extends StatelessWidget {
           backgroundColor: const Color(0xFF6366F1),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
+          ),
+          extendedTextStyle: TextStyle(
+            fontSize: isWeb ? 18 : 14,
+            fontWeight: FontWeight.w600,
+          ),
+          extendedIconLabelSpacing: isWeb ? 12 : 8,
+          extendedPadding: EdgeInsets.symmetric(
+            horizontal: isWeb ? 28 : 20,
+            vertical: isWeb ? 18 : 12,
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white.withOpacity(0.8),
+          fillColor: Colors.white.withValues(alpha: 0.8),
+          hintStyle: TextStyle(
+            color: Colors.grey.shade400,
+            fontSize: baseFontSize,
+          ),
+          labelStyle: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: baseFontSize,
+          ),
+          floatingLabelStyle: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: baseFontSize,
+          ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
             borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
             borderSide: BorderSide(color: Colors.grey.shade200),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
+            borderSide: BorderSide(
+              color: const Color(0xFF6366F1), 
+              width: isWeb ? 3 : 2,
+            ),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: isWeb ? 24 : 20, 
+            vertical: isWeb ? 20 : 16,
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6366F1),
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            padding: EdgeInsets.symmetric(
+              vertical: isWeb ? 20 : 16, 
+              horizontal: isWeb ? 32 : 24,
+            ),
+            textStyle: TextStyle(
+              fontSize: isWeb ? 18 : 16,
+              fontWeight: FontWeight.w600,
+            ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
             ),
             elevation: 4,
+            minimumSize: Size(isWeb ? 120 : 88, isWeb ? 56 : 48),
           ),
         ),
         chipTheme: ChipThemeData(
-          backgroundColor: Colors.white.withOpacity(0.6),
-          selectedColor: const Color(0xFF6366F1).withOpacity(0.2),
-          labelStyle: const TextStyle(color: Color(0xFF1F2937)),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          backgroundColor: Colors.white.withValues(alpha: 0.6),
+          selectedColor: const Color(0xFF6366F1).withValues(alpha: 0.2),
+          labelStyle: TextStyle(
+            color: const Color(0xFF1F2937),
+            fontSize: baseFontSize,
           ),
+          padding: EdgeInsets.symmetric(
+            horizontal: isWeb ? 16 : 12, 
+            vertical: isWeb ? 10 : 8,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
+          ),
+        ),
+        textTheme: TextTheme(
+          bodySmall: TextStyle(fontSize: isWeb ? 16 : 12),
+          bodyMedium: TextStyle(fontSize: baseFontSize),
+          bodyLarge: TextStyle(fontSize: isWeb ? 20 : 16),
+          titleSmall: TextStyle(fontSize: baseFontSize),
+          titleMedium: TextStyle(fontSize: isWeb ? 20 : 16),
+          titleLarge: TextStyle(fontSize: isWeb ? 24 : 20),
+        ),
+        iconTheme: IconThemeData(
+          size: isWeb ? 26 : 20,
         ),
       ),
       home: const EntryWrapper(),
@@ -125,48 +186,31 @@ class EntryWrapper extends StatefulWidget {
 }
 
 class _EntryWrapperState extends State<EntryWrapper> {
-  bool _hasName = false;
-  bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
-    _checkName();
+    _setupAuthListener();
   }
 
-  Future<void> _checkName() async {
-    final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString(AppConstants.keyUserName);
-    if (mounted) {
-      setState(() {
-        _hasName = name != null && name.isNotEmpty;
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _onNameSubmitted() {
-    setState(() {
-      _hasName = true;
+  void _setupAuthListener() {
+    // Слушаем изменения состояния авторизации
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (mounted) {
+        setState(() {
+          // Перестраиваем виджет при изменении сессии
+        });
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF6366F1),
-          ),
-        ),
-      );
+    // Если пользователь не авторизован, показываем экран входа
+    if (Supabase.instance.client.auth.currentSession == null) {
+      return const LoginScreen();
     }
 
-    if (!_hasName) {
-      return NameEntryScreen(onNameSubmitted: _onNameSubmitted);
-    }
-
+    // Если авторизован, показываем главный экран
     return const MainScreen();
   }
 }
@@ -208,8 +252,8 @@ class _MainScreenState extends State<MainScreen> {
             _currentIndex = index;
           });
         },
-        backgroundColor: Colors.white.withOpacity(0.9),
-        indicatorColor: const Color(0xFF6366F1).withOpacity(0.2),
+        backgroundColor: Colors.white.withValues(alpha: 0.9),
+        indicatorColor: const Color(0xFF6366F1).withValues(alpha: 0.2),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.task_alt_outlined),

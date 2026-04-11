@@ -1,0 +1,189 @@
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║   🔥 ФИНАЛЬНОЕ РЕШЕНИЕ - ПРОБЛЕМА В DOCKER-COMPOSE       ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+ПРОБЛЕМА:
+  Auth всё ещё пытается подключиться к supabase-mail,
+  даже после изменения .env
+  
+  Причина: В docker-compose.yml жестко прописан
+  GOTRUE_SMTP_HOST=supabase-mail
+
+РЕШЕНИЕ:
+  Изменить docker-compose.yml для Auth сервиса
+
+═══════════════════════════════════════════════════════════
+ШАГ 1: НАЙТИ DOCKER-COMPOSE.YML
+═══════════════════════════════════════════════════════════
+
+ssh root@185.225.34.252
+cd /home/supabase/supabase/docker
+ls -la docker-compose.yml
+
+═══════════════════════════════════════════════════════════
+ШАГ 2: ОТРЕДАКТИРОВАТЬ AUTH СЕРВИС
+═══════════════════════════════════════════════════════════
+
+nano docker-compose.yml
+
+Найдите секцию auth (примерно так):
+
+  auth:
+    image: supabase/gotrue:v2.183.0
+    depends_on:
+      - db
+      - mail    ← УДАЛИТЕ ЭТУ СТРОКУ!
+    environment:
+      GOTRUE_SMTP_HOST: supabase-mail    ← УДАЛИТЕ!
+      GOTRUE_SMTP_PORT: 2500             ← УДАЛИТЕ!
+      ... другие настройки ...
+
+ИЗМЕНИТЕ НА:
+
+  auth:
+    image: supabase/gotrue:v2.183.0
+    depends_on:
+      - db
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: ${DATABASE_URL}
+      GOTRUE_SITE_URL: ${GOTRUE_SITE_URL:-https://api.bike53.ru}
+      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST:-*}
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: ${GOTRUE_JWT_EXP:-3600}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_PASSWORD_MIN_LENGTH: ${GOTRUE_PASSWORD_MIN_LENGTH:-6}
+      GOTRUE_LOG_LEVEL: ${GOTRUE_LOG_LEVEL:-info}
+      # НЕ УКАЗЫВАЕМ SMTP НАСТРОЙКИ ВООБЩЕ!
+    restart: unless-stopped
+    ports:
+      - "9999:9999"
+
+Сохраните: Ctrl+O, Enter, Ctrl+X
+
+═══════════════════════════════════════════════════════════
+ШАГ 3: ПЕРЕСОЗДАТЬ AUTH КОНТЕЙНЕР
+═══════════════════════════════════════════════════════════
+
+# Остановить и удалить старый контейнер
+docker-compose stop auth
+docker-compose rm -f auth
+
+# Создать и запустить новый
+docker-compose up -d auth
+
+# Проверить логи
+docker logs -f supabase-auth
+
+Не должно быть ошибок про supabase-mail!
+
+═══════════════════════════════════════════════════════════
+ШАГ 4: ПРОВЕРКА
+═══════════════════════════════════════════════════════════
+
+# Health check
+curl http://localhost:9999/health
+
+Должно вернуть:
+{"version":"v2.183.0","name":"GoTrue"}
+
+# Логи не должны содержать ошибок
+docker logs --tail 20 supabase-auth
+
+Не должно быть:
+✗ "lookup supabase-mail"
+✗ "Error sending confirmation email"
+
+═══════════════════════════════════════════════════════════
+АЛЬТЕРНАТИВА: ЗАПУСТИТЬ MAIL СЕРВИС
+═══════════════════════════════════════════════════════════
+
+Если не хотите менять docker-compose.yml,
+можно запустить фейковый mail сервис:
+
+docker run -d \
+  --name supabase-mail \
+  --network supabase_default \
+  -p 2500:2500 \
+  mailhog/mailhog
+
+Это запустит MailHog - тестовый SMTP сервер,
+который будет принимать письма но не отправлять их.
+
+Затем перезапустите Auth:
+docker-compose restart auth
+
+═══════════════════════════════════════════════════════════
+МИНИМАЛЬНЫЙ DOCKER-COMPOSE ДЛЯ AUTH (КОПИРУЙТЕ)
+═══════════════════════════════════════════════════════════
+
+  auth:
+    image: supabase/gotrue:v2.183.0
+    container_name: supabase-auth
+    depends_on:
+      - db
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: ${DATABASE_URL}
+      GOTRUE_SITE_URL: https://api.bike53.ru
+      GOTRUE_URI_ALLOW_LIST: "*"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_PASSWORD_MIN_LENGTH: "6"
+      GOTRUE_LOG_LEVEL: info
+    restart: unless-stopped
+    ports:
+      - "9999:9999"
+    networks:
+      - default
+
+═══════════════════════════════════════════════════════════
+ПОСЛЕ ИЗМЕНЕНИЙ
+═══════════════════════════════════════════════════════════
+
+1. Перезапустите приложение:
+   flutter run
+
+2. Попробуйте зарегистрироваться:
+   Имя: Vv
+   Телефон: 79116352787
+   Пароль: qweasd
+
+3. Должно работать!
+
+═══════════════════════════════════════════════════════════
+ЕСЛИ ВСЁ ЕЩЁ НЕ РАБОТАЕТ
+═══════════════════════════════════════════════════════════
+
+Пришлите:
+
+1. Содержимое auth секции из docker-compose.yml:
+   cat docker-compose.yml | grep -A 30 "auth:"
+
+2. Новые логи после изменений:
+   docker logs --tail 50 supabase-auth
+
+3. Результат health check:
+   curl http://localhost:9999/health
+
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║  🚀 ГЛАВНОЕ: УБРАТЬ ЗАВИСИМОСТЬ ОТ MAIL В DOCKER-COMPOSE║
+║                                                           ║
+║  Либо запустить фейковый mail сервис (MailHog)          ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝

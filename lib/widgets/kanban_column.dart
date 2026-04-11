@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../data/models/task_model.dart';
 import '../core/constants.dart';
+import '../core/responsive_sizes.dart';
 import 'draggable_task_card.dart';
 
 class KanbanColumn extends StatelessWidget {
@@ -18,33 +20,7 @@ class KanbanColumn extends StatelessWidget {
   });
 
   Color _getStatusColor() {
-    switch (status) {
-      case AppConstants.statusPending:
-        return const Color(0xFFF59E0B); // Amber
-      case AppConstants.statusAccepted:
-        return const Color(0xFF3B82F6); // Blue
-      case AppConstants.statusPostponed:
-        return const Color(0xFF8B5CF6); // Purple
-      case AppConstants.statusArchived:
-        return const Color(0xFF6B7280); // Gray
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _getStatusBackgroundColor() {
-    switch (status) {
-      case AppConstants.statusPending:
-        return const Color(0xFFFEF3C7); // Light Amber
-      case AppConstants.statusAccepted:
-        return const Color(0xFFDBEAFE); // Light Blue
-      case AppConstants.statusPostponed:
-        return const Color(0xFFEDE9FE); // Light Purple
-      case AppConstants.statusArchived:
-        return const Color(0xFFF3F4F6); // Light Gray
-      default:
-        return Colors.grey.shade100;
-    }
+    return getStatusColor(status);
   }
 
   IconData _getStatusIcon() {
@@ -65,89 +41,105 @@ class KanbanColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = _getStatusColor();
-    final backgroundColor = _getStatusBackgroundColor();
+    final isWeb = kIsWeb;
     
     return DragTarget<TaskModel>(
-      onWillAccept: (task) => task != null && task.status != status,
-      onAccept: (task) {
-        onStatusChanged(task.id, status);
+      onWillAcceptWithDetails: (details) => details.data.status != status,
+      onAcceptWithDetails: (details) {
+        onStatusChanged(details.data.id, status);
       },
       builder: (context, candidateData, rejectedData) {
         final isHovering = candidateData.isNotEmpty;
         
         return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 320,
-          margin: const EdgeInsets.symmetric(horizontal: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 0),
           decoration: BoxDecoration(
             color: isHovering 
-                ? statusColor.withOpacity(0.1)
-                : backgroundColor,
-            borderRadius: BorderRadius.circular(16),
+                ? statusColor.withValues(alpha: 0.08)
+                : const Color(0xFFFAFAFA),
+            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
             border: Border.all(
               color: isHovering 
                   ? statusColor
-                  : statusColor.withOpacity(0.3),
-              width: isHovering ? 3 : 2,
+                  : statusColor.withValues(alpha: 0.2),
+              width: isHovering ? (isWeb ? 4 : 3) : (isWeb ? 2 : 1.5),
             ),
             boxShadow: isHovering
                 ? [
                     BoxShadow(
-                      color: statusColor.withOpacity(0.3),
+                      color: statusColor.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
                   ]
-                : null,
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(isWeb ? 20 : 16),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.15),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(isWeb ? 18 : 14),
+                    topRight: Radius.circular(isWeb ? 18 : 14),
                   ),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: EdgeInsets.all(isWeb ? 10 : 8),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(isWeb ? 12 : 10),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.3),
+                          width: isWeb ? 2 : 1.5,
+                        ),
                       ),
                       child: Icon(
                         _getStatusIcon(),
                         color: statusColor,
-                        size: 20,
+                        size: isWeb ? 26 : 20,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: isWeb ? 16 : 12),
                     Expanded(
                       child: Text(
                         getStatusDisplayName(status),
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: isWeb ? 20 : 16,
                           fontWeight: FontWeight.bold,
                           color: statusColor,
                         ),
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isWeb ? 14 : 10, 
+                        vertical: isWeb ? 6 : 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.3),
+                          width: isWeb ? 2 : 1.5,
+                        ),
                       ),
                       child: Text(
                         '${tasks.length}',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: isWeb ? 18 : 14,
                           fontWeight: FontWeight.bold,
                           color: statusColor,
                         ),
@@ -161,21 +153,21 @@ class KanbanColumn extends StatelessWidget {
                 child: tasks.isEmpty
                     ? Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(24),
+                          padding: EdgeInsets.all(isWeb ? 32 : 24),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 isHovering ? Icons.add_circle_outline : Icons.inbox_outlined,
-                                size: 48,
+                                size: isWeb ? 62 : 48,
                                 color: isHovering ? statusColor : Colors.grey[400],
                               ),
-                              const SizedBox(height: 12),
+                              SizedBox(height: isWeb ? 16 : 12),
                               Text(
                                 isHovering ? 'Отпустите здесь' : 'Нет задач',
                                 style: TextStyle(
                                   color: isHovering ? statusColor : Colors.grey[600],
-                                  fontSize: 14,
+                                  fontSize: isWeb ? 18 : 14,
                                   fontWeight: isHovering ? FontWeight.w600 : FontWeight.normal,
                                 ),
                               ),
@@ -184,7 +176,7 @@ class KanbanColumn extends StatelessWidget {
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(8),
+                        padding: EdgeInsets.all(isWeb ? 12 : 8),
                         itemCount: tasks.length,
                         itemBuilder: (context, index) {
                           final task = tasks[index];

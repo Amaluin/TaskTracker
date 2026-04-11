@@ -18,7 +18,10 @@ class RemindersNotifier
     extends StateNotifier<AsyncValue<List<TaskReminderModel>>> {
   final ReminderRepository _repository;
 
-  RemindersNotifier(this._repository) : super(const AsyncValue.loading());
+  RemindersNotifier(this._repository) : super(const AsyncValue.data([])) {
+    // Инициализируем с пустым списком вместо loading
+    loadAllReminders();
+  }
 
   Future<void> loadRemindersForTask(String taskId) async {
     try {

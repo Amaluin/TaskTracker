@@ -1,19 +1,16 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/constants.dart';
 import '../models/task_model.dart';
 
 class TaskRepository {
   final SupabaseClient _client = Supabase.instance.client;
 
-  Future<String?> _getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(AppConstants.keyUserId);
+  String? _getUserId() {
+    return _client.auth.currentUser?.id;
   }
 
   Future<List<TaskModel>> getTasks({String? status, String? priority}) async {
-    final userId = await _getUserId();
-    if (userId == null) throw Exception('User not identified');
+    final userId = _getUserId();
+    if (userId == null) throw Exception('User not authenticated');
 
     var query = _client.from('tasks').select().eq('user_id', userId);
 
@@ -29,8 +26,8 @@ class TaskRepository {
   }
 
   Future<List<TaskModel>> searchTasks(String queryStr) async {
-    final userId = await _getUserId();
-    if (userId == null) throw Exception('User not identified');
+    final userId = _getUserId();
+    if (userId == null) throw Exception('User not authenticated');
 
     final data = await _client
         .from('tasks')
@@ -82,8 +79,8 @@ class TaskRepository {
     DateTime start,
     DateTime end,
   ) async {
-    final userId = await _getUserId();
-    if (userId == null) throw Exception('User not identified');
+    final userId = _getUserId();
+    if (userId == null) throw Exception('User not authenticated');
 
     final data = await _client
         .from('tasks')

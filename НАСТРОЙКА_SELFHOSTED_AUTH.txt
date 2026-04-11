@@ -1,0 +1,219 @@
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║   🔧 НАСТРОЙКА AUTH ДЛЯ SELF-HOSTED SUPABASE            ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+Для self-hosted Supabase настройки Auth находятся в .env файле,
+а не в UI Studio!
+
+═══════════════════════════════════════════════════════════
+ШАГ 1: ПРОВЕРИТЬ/СОЗДАТЬ .ENV ФАЙЛ (SSH)
+═══════════════════════════════════════════════════════════
+
+1. Подключитесь к серверу:
+   ssh user@185.225.34.252
+
+2. Перейдите в папку Supabase:
+   cd /path/to/supabase  # Путь к вашей установке
+
+3. Проверьте, есть ли .env файл:
+   ls -la .env
+
+4. Если файла НЕТ, создайте из примера:
+   cp .env.example .env
+
+5. Откройте .env для редактирования:
+   nano .env
+
+═══════════════════════════════════════════════════════════
+ШАГ 2: НАСТРОИТЬ AUTH В .ENV
+═══════════════════════════════════════════════════════════
+
+Добавьте/измените эти переменные в .env:
+
+# ============================================
+# AUTH НАСТРОЙКИ
+# ============================================
+
+# Включить Auth
+GOTRUE_SITE_URL=https://api.bike53.ru
+GOTRUE_URI_ALLOW_LIST=*
+
+# Отключить подтверждение email (для разработки)
+GOTRUE_MAILER_AUTOCONFIRM=true
+
+# Разрешить регистрацию
+GOTRUE_DISABLE_SIGNUP=false
+
+# Минимальная длина пароля
+GOTRUE_PASSWORD_MIN_LENGTH=6
+
+# JWT настройки
+GOTRUE_JWT_SECRET=your-super-secret-jwt-token-with-at-least-32-characters-long
+GOTRUE_JWT_EXP=3600
+GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
+
+# Email провайдер (для разработки можно отключить)
+GOTRUE_SMTP_HOST=
+GOTRUE_SMTP_PORT=587
+GOTRUE_SMTP_USER=
+GOTRUE_SMTP_PASS=
+GOTRUE_SMTP_ADMIN_EMAIL=admin@bike53.ru
+
+# Разрешить email/password авторизацию
+GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+
+# Отключить rate limiting (для разработки)
+GOTRUE_RATE_LIMIT_EMAIL_SENT=100
+GOTRUE_RATE_LIMIT_TOKEN_REFRESH=100
+
+# Database URL
+GOTRUE_DB_DRIVER=postgres
+DATABASE_URL=postgresql://postgres:your-postgres-password@db:5432/postgres
+
+═══════════════════════════════════════════════════════════
+ШАГ 3: ПЕРЕЗАПУСТИТЬ SUPABASE
+═══════════════════════════════════════════════════════════
+
+После изменения .env нужно перезапустить сервисы:
+
+1. Остановите Supabase:
+   docker-compose down
+
+2. Запустите снова:
+   docker-compose up -d
+
+3. Проверьте логи Auth:
+   docker-compose logs -f auth
+
+4. Дождитесь сообщения:
+   "GoTrue API started"
+
+═══════════════════════════════════════════════════════════
+ШАГ 4: ПРОВЕРИТЬ ЧТО AUTH РАБОТАЕТ
+═══════════════════════════════════════════════════════════
+
+1. Проверьте health endpoint:
+   curl https://api.bike53.ru/auth/v1/health
+   
+   Должно вернуть: {"version":"...","name":"GoTrue"}
+
+2. Если ошибка 502/504:
+   → Auth сервис не запустился
+   → Проверьте логи: docker-compose logs auth
+
+3. Если ошибка 500:
+   → Проблема с базой данных
+   → Примените ПОЛНАЯ_ПЕРЕСБОРКА.sql
+
+═══════════════════════════════════════════════════════════
+МИНИМАЛЬНЫЙ .ENV ДЛЯ AUTH (КОПИРУЙТЕ ЭТО)
+═══════════════════════════════════════════════════════════
+
+# Основные
+POSTGRES_PASSWORD=your-super-secret-postgres-password
+JWT_SECRET=your-super-secret-jwt-token-32-chars-min
+
+# Auth
+GOTRUE_SITE_URL=https://api.bike53.ru
+GOTRUE_MAILER_AUTOCONFIRM=true
+GOTRUE_DISABLE_SIGNUP=false
+GOTRUE_PASSWORD_MIN_LENGTH=6
+GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+GOTRUE_JWT_SECRET=${JWT_SECRET}
+DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+
+# Домены
+API_EXTERNAL_URL=https://api.bike53.ru
+STUDIO_URL=https://studio.bike53.ru
+
+═══════════════════════════════════════════════════════════
+ШАГ 5: ПРИМЕНИТЬ МИГРАЦИЮ БД
+═══════════════════════════════════════════════════════════
+
+После настройки Auth примените миграцию:
+
+1. Откройте: https://studio.bike53.ru
+2. SQL Editor → New query
+3. Скопируйте: ПОЛНАЯ_ПЕРЕСБОРКА.sql
+4. Выполните (Run)
+5. Дождитесь: "✓ БАЗА ДАННЫХ ПЕРЕСОЗДАНА!"
+
+═══════════════════════════════════════════════════════════
+ШАГ 6: ТЕСТ РЕГИСТРАЦИИ
+═══════════════════════════════════════════════════════════
+
+1. Перезапустите приложение:
+   flutter run
+
+2. Попробуйте зарегистрироваться:
+   Имя: Тест
+   Телефон: 79116352787
+   Пароль: qweasd
+
+3. Если успешно:
+   ✓ Auth работает!
+   ✓ База готова!
+   ✓ Всё настроено!
+
+4. Если ошибка 500:
+   → Проверьте логи Auth:
+     docker-compose logs auth
+   → Проверьте логи Kong:
+     docker-compose logs kong
+
+═══════════════════════════════════════════════════════════
+ПРОВЕРКА DOCKER COMPOSE
+═══════════════════════════════════════════════════════════
+
+Убедитесь, что в docker-compose.yml есть сервис auth:
+
+services:
+  auth:
+    image: supabase/gotrue:v2.99.0
+    depends_on:
+      - db
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: ${DATABASE_URL}
+      GOTRUE_SITE_URL: ${GOTRUE_SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${GOTRUE_URI_ALLOW_LIST}
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: ${GOTRUE_JWT_EXP}
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED}
+    ports:
+      - "9999:9999"
+
+═══════════════════════════════════════════════════════════
+БЫСТРАЯ ДИАГНОСТИКА
+═══════════════════════════════════════════════════════════
+
+1. Auth сервис запущен?
+   docker ps | grep auth
+   ✓ Должен быть в списке
+
+2. Auth отвечает?
+   curl http://localhost:9999/health
+   ✓ Должен вернуть JSON
+
+3. Kong проксирует Auth?
+   curl https://api.bike53.ru/auth/v1/health
+   ✓ Должен вернуть JSON
+
+4. База данных готова?
+   psql -h localhost -U postgres -d postgres -c "SELECT * FROM user_profiles LIMIT 1;"
+   ✓ Таблица существует
+
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║  🚀 ГЛАВНОЕ: НАСТРОИТЬ .ENV И ПЕРЕЗАПУСТИТЬ DOCKER       ║
+║                                                           ║
+║  Без правильных настроек Auth не будет работать!         ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
