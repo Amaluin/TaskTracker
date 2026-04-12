@@ -406,6 +406,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         _isEditing
             ? TextFormField(
                 controller: _titleController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: 'Введите название задачи',
                   prefixIcon: Icon(Icons.title, color: Color(0xFF6366F1)),
@@ -438,6 +439,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             ? TextFormField(
                 controller: _descriptionController,
                 maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
                   hintText: 'Добавьте описание задачи',
                   prefixIcon: Padding(
@@ -1000,19 +1002,38 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 
                 return Column(
                   children: taskReminders.map((reminder) {
-                    final isUpcoming = reminder.remindAt.isAfter(DateTime.now());
+                    final now = DateTime.now();
+                    // Если remindAt в UTC, конвертируем в локальное время
+                    final remindAtLocal = reminder.remindAt.isUtc
+                        ? reminder.remindAt.toLocal()
+                        : reminder.remindAt;
+                    final isUpcoming = remindAtLocal.isAfter(now);
                     final isPast = !isUpcoming;
-                    final timeUntil = reminder.remindAt.difference(DateTime.now());
+                    final timeUntil = remindAtLocal.difference(now);
                     
                     String timeText;
                     if (isPast) {
                       timeText = 'Прошло';
+                    } else if (timeUntil.inMinutes < 1) {
+                      timeText = 'Менее минуты';
                     } else if (timeUntil.inMinutes < 60) {
                       timeText = 'Через ${timeUntil.inMinutes} мин';
                     } else if (timeUntil.inHours < 24) {
-                      timeText = 'Через ${timeUntil.inHours} ч';
+                      final hours = timeUntil.inHours;
+                      final minutes = timeUntil.inMinutes % 60;
+                      if (minutes > 0) {
+                        timeText = 'Через $hours ч $minutes мин';
+                      } else {
+                        timeText = 'Через $hours ч';
+                      }
                     } else {
-                      timeText = 'Через ${timeUntil.inDays} дн';
+                      final days = timeUntil.inDays;
+                      final hours = timeUntil.inHours % 24;
+                      if (hours > 0) {
+                        timeText = 'Через $days дн $hours ч';
+                      } else {
+                        timeText = 'Через $days дн';
+                      }
                     }
                     
                     return Container(

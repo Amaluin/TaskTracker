@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../core/constants.dart';
 import '../../data/models/task_reminder_model.dart';
 import '../../providers/reminder_providers.dart';
 import '../../services/notification_service.dart';
+import '../../services/reminder_restore_service.dart';
 import '../../widgets/ios_time_picker.dart';
 
 class ReminderScreen extends ConsumerStatefulWidget {
@@ -154,6 +157,112 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
         .toggleReminder(reminder.id, !reminder.enabled, widget.taskId);
   }
 
+  Future<void> _syncReminders() async {
+    if (!mounted) return;
+
+    // Показываем индикатор загрузки
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF6366F1)),
+                SizedBox(height: 16),
+                Text('Синхронизация напоминаний...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await ReminderRestoreService().rescheduleAllReminders();
+
+      if (mounted) {
+        Navigator.pop(context); // Закрываем диалог загрузки
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Напоминания синхронизированы'),
+            backgroundColor: Color(0xFF6366F1),
+          ),
+        );
+
+        // Перезагружаем список
+        ref.read(remindersProvider.notifier).loadRemindersForTask(widget.taskId);
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    if (!mounted) return;
+
+    final notificationService = NotificationService();
+    String statusText = '';
+
+    if (kIsWeb) {
+      statusText = 'Веб-уведомления';
+    } else if (Platform.isAndroid) {
+      final hasExactAlarm = await notificationService.hasExactAlarmPermission();
+      final areEnabled = await notificationService.areNotificationsEnabled();
+
+      statusText = 'Android:\n';
+      statusText += '• Уведомления: ${areEnabled ? "Включены" : "Выключены"}\n';
+      statusText += '• Точные будильники: ';
+      if (hasExactAlarm == true) {
+        statusText += 'Разрешены';
+      } else if (hasExactAlarm == false) {
+        statusText += 'Запрещены (напоминания могут не работать!)';
+      } else {
+        statusText += 'Неизвестно';
+      }
+    } else if (Platform.isIOS) {
+      statusText = 'iOS: локальные уведомления';
+    }
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Статус уведомлений'),
+        content: SingleChildScrollView(
+          child: Text(statusText),
+        ),
+        actions: [
+          if (Platform.isAndroid)
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await notificationService.requestExactAlarmPermission();
+              },
+              child: const Text('Открыть настройки'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,6 +272,20 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          if (!kIsWeb && Platform.isAndroid) ...[
+            IconButton(
+              icon: const Icon(Icons.sync),
+              tooltip: 'Синхронизировать напоминания',
+              onPressed: _syncReminders,
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              tooltip: 'Проверить разрешения',
+              onPressed: _checkPermissions,
+            ),
+          ],
+        ],
       ),
       body: Consumer(
         builder: (context, ref, child) {
@@ -242,16 +365,30 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
                               : Colors.grey,
                         ),
                       ),
-                      title: Text(
-                        '${reminder.remindAt.day}.${reminder.remindAt.month}.${reminder.remindAt.year}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
+                      title: Builder(
+                        builder: (context) {
+                          final remindAt = reminder.remindAt.isUtc
+                              ? reminder.remindAt.toLocal()
+                              : reminder.remindAt;
+                          return Text(
+                            '${remindAt.day}.${remindAt.month}.${remindAt.year}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          );
+                        },
                       ),
-                      subtitle: Text(
-                        '${reminder.remindAt.hour}:${reminder.remindAt.minute.toString().padLeft(2, '0')} - ${reminder.type}',
-                        style: TextStyle(color: Colors.grey[600]),
+                      subtitle: Builder(
+                        builder: (context) {
+                          final remindAt = reminder.remindAt.isUtc
+                              ? reminder.remindAt.toLocal()
+                              : reminder.remindAt;
+                          return Text(
+                            '${remindAt.hour}:${remindAt.minute.toString().padLeft(2, '0')} - ${reminder.type}',
+                            style: TextStyle(color: Colors.grey[600]),
+                          );
+                        },
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,

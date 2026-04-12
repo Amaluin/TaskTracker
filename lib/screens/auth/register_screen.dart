@@ -130,10 +130,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
         
-        // Небольшая задержка для обновления состояния
-        await Future.delayed(const Duration(milliseconds: 300));
+        // Небольшая задержка для обновления состояния auth listener
+        await Future.delayed(const Duration(milliseconds: 500));
         
-        // Переходим на главный экран (EntryWrapper автоматически покажет MainScreen)
+        // Закрываем все экраны и возвращаемся к EntryWrapper
+        // который автоматически покажет MainScreen т.к. пользователь авторизован
         if (mounted) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
@@ -255,6 +256,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     TextFormField(
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
+                      textCapitalization: TextCapitalization.none,
                       decoration: InputDecoration(
                         labelText: 'Номер телефона',
                         hintText: '+7 (900) 123-45-67',
@@ -289,6 +291,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     TextFormField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
+                      textCapitalization: TextCapitalization.none,
                       decoration: InputDecoration(
                         labelText: 'Пароль',
                         hintText: 'Минимум 6 символов',
@@ -322,6 +325,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     TextFormField(
                       controller: _confirmPasswordController,
                       obscureText: _obscureConfirmPassword,
+                      textCapitalization: TextCapitalization.none,
                       decoration: InputDecoration(
                         labelText: 'Подтвердите пароль',
                         hintText: 'Введите пароль еще раз',

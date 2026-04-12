@@ -58,6 +58,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: 'Поиск задач...',
                   border: InputBorder.none,

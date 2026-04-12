@@ -4,8 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
 import '../../data/models/task_model.dart';
+import '../../data/models/task_reminder_model.dart';
 import '../../providers/task_providers.dart';
+import '../../providers/reminder_providers.dart';
 import '../../providers/user_providers.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/ios_time_picker.dart';
 
 class CreateTaskScreen extends ConsumerStatefulWidget {
@@ -23,6 +26,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   String _priority = AppConstants.priorityMedium;
   DateTime? _dueDate;
   String? _selectedUserId; // ID выбранного пользователя
+  bool _isLoading = false;
 
   IconData _getStatusIcon(String status) {
     switch (status) {
@@ -93,39 +97,120 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    if (currentUserId == null) {
+    setState(() => _isLoading = true);
+
+    try {
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ошибка: пользователь не авторизован'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Используем выбранного пользователя или текущего
+      final assignedUserId = _selectedUserId ?? currentUserId;
+
+      final now = DateTime.now();
+      final task = TaskModel(
+        id: const Uuid().v4(),
+        userId: assignedUserId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        status: _status,
+        priority: _priority,
+        dueAt: _dueDate,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await ref.read(tasksProvider.notifier).addTask(task);
+
+      // Если установлен срок выполнения, создаём напоминание
+      if (_dueDate != null && mounted) {
+        try {
+          print('📅 Создаём напоминание на: $_dueDate');
+          final user = Supabase.instance.client.auth.currentUser;
+          if (user != null) {
+            final reminder = TaskReminderModel(
+              id: const Uuid().v4(),
+              taskId: task.id,
+              userId: user.id,
+              remindAt: _dueDate!,
+              type: AppConstants.reminderTypeNotification,
+              enabled: true,
+              createdAt: now,
+            );
+
+            print('💾 Сохраняем напоминание в БД: ${reminder.id}');
+            await ref.read(remindersProvider.notifier).addReminder(reminder);
+
+            print('🔔 Планируем уведомление');
+            // Уведомление запланируется в фоне, ошибки не критичны
+            NotificationService().scheduleNotification(
+              id: reminder.id.hashCode,
+              title: 'Напоминание о задаче',
+              body: 'Задача "${task.title}" должна быть выполнена',
+              scheduledDate: _dueDate!,
+              payload: task.id,
+            ).catchError((e) {
+              print('⚠️ Не удалось запланировать уведомление: $e');
+            });
+
+            print('✅ Напоминание создано успешно');
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Напоминание установлено на ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year} ${_dueDate!.hour}:${_dueDate!.minute.toString().padLeft(2, '0')}'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        } catch (reminderError) {
+          print('❌ Ошибка создания напоминания: $reminderError');
+          if (mounted) {
+            // Показываем предупреждение, но не останавливаем процесс
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Задача создана, но не удалось установить напоминание: $reminderError'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: 'OK',
+                  textColor: Colors.white,
+                  onPressed: () {},
+                ),
+              ),
+            );
+          }
+        }
+      }
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ошибка: пользователь не авторизован'),
+          SnackBar(
+            content: Text('Ошибка: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
       }
-      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    // Используем выбранного пользователя или текущего
-    final assignedUserId = _selectedUserId ?? currentUserId;
-
-    final now = DateTime.now();
-    final task = TaskModel(
-      id: const Uuid().v4(),
-      userId: assignedUserId,
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim().isEmpty
-          ? null
-          : _descriptionController.text.trim(),
-      status: _status,
-      priority: _priority,
-      dueAt: _dueDate,
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    await ref.read(tasksProvider.notifier).addTask(task);
-    if (mounted) Navigator.pop(context);
   }
 
   @override
@@ -150,6 +235,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                   children: [
                     TextFormField(
                       controller: _titleController,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Название',
                         hintText: 'Введите название задачи',
@@ -166,6 +252,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                     TextFormField(
                       controller: _descriptionController,
                       maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Описание',
                         hintText: 'Добавьте описание задачи',
@@ -517,11 +604,20 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _saveTask,
-                  icon: const Icon(Icons.check),
-                  label: const Text(
-                    'Сохранить задачу',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  onPressed: _isLoading ? null : _saveTask,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.check),
+                  label: Text(
+                    _isLoading ? 'Сохранение...' : 'Сохранить задачу',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),

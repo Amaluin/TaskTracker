@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants.dart';
@@ -45,8 +46,14 @@ class _NameEntryScreenState extends State<NameEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: widget.canGoBack
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Color(0xFFF5F7FA),
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        appBar: widget.canGoBack
           ? AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
@@ -139,6 +146,7 @@ class _NameEntryScreenState extends State<NameEntryScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

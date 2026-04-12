@@ -235,44 +235,104 @@ class DraggableTaskCard extends StatelessWidget {
             ),
           ),
         ],
-        if (task.dueAt != null) ...[
-          SizedBox(height: isWeb ? 16 : 12),
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: isWeb ? 14 : 10,
-              vertical: isWeb ? 8 : 6,
-            ),
-            decoration: BoxDecoration(
-              color: task.dueAt!.isBefore(DateTime.now())
-                  ? Colors.red.withValues(alpha: 0.1)
-                  : Colors.blue.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: isWeb ? 18 : 14,
-                  color: task.dueAt!.isBefore(DateTime.now())
-                      ? Colors.red
-                      : Colors.blue,
+        SizedBox(height: isWeb ? 16 : 12),
+        Wrap(
+          spacing: isWeb ? 12 : 8,
+          runSpacing: isWeb ? 8 : 6,
+          children: [
+            if (task.dueAt != null)
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isWeb ? 14 : 10,
+                  vertical: isWeb ? 8 : 6,
                 ),
-                SizedBox(width: isWeb ? 8 : 6),
-                Text(
-                  '${task.dueAt!.day}.${task.dueAt!.month}.${task.dueAt!.year}',
-                  style: TextStyle(
-                    fontSize: isWeb ? 16 : 12,
-                    fontWeight: FontWeight.w500,
-                    color: task.dueAt!.isBefore(DateTime.now())
-                        ? Colors.red
-                        : Colors.blue,
+                decoration: BoxDecoration(
+                  color: task.dueAt!.isBefore(DateTime.now())
+                      ? Colors.red.withValues(alpha: 0.1)
+                      : Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: isWeb ? 18 : 14,
+                      color: task.dueAt!.isBefore(DateTime.now())
+                          ? Colors.red
+                          : Colors.blue,
+                    ),
+                    SizedBox(width: isWeb ? 8 : 6),
+                    Text(
+                      '${task.dueAt!.day}.${task.dueAt!.month.toString().padLeft(2, '0')}.${task.dueAt!.year} ${task.dueAt!.hour}:${task.dueAt!.minute.toString().padLeft(2, '0')}',
+                      style: TextStyle(
+                        fontSize: isWeb ? 16 : 12,
+                        fontWeight: FontWeight.w500,
+                        color: task.dueAt!.isBefore(DateTime.now())
+                            ? Colors.red
+                            : Colors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (task.assignedToUserName != null && task.assignedToUserName!.isNotEmpty)
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isWeb ? 14 : 10,
+                  vertical: isWeb ? 8 : 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+                  border: Border.all(
+                    color: Colors.purple.withValues(alpha: 0.3),
                   ),
                 ),
-              ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: isWeb ? 18 : 14,
+                      color: Colors.purple,
+                    ),
+                    SizedBox(width: isWeb ? 8 : 6),
+                    Text(
+                      task.assignedToUserName!,
+                      style: TextStyle(
+                        fontSize: isWeb ? 16 : 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.purple,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: isWeb ? 14 : 10,
+                vertical: isWeb ? 8 : 6,
+              ),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+                border: Border.all(
+                  color: statusColor.withValues(alpha: 0.4),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                getStatusDisplayName(task.status),
+                style: TextStyle(
+                  fontSize: isWeb ? 16 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: statusColor,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
         if (!isDragging) ...[
           SizedBox(height: isWeb ? 10 : 8),
           Row(

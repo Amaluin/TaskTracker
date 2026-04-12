@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/notification_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -13,11 +15,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _userName = '';
   String _userPhone = '';
   bool _isLoading = true;
+  bool _notificationsEnabled = true;
+  bool? _exactAlarmPermission;
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadNotificationSettings();
+    _checkExactAlarmPermission();
+  }
+
+  Future<void> _checkExactAlarmPermission() async {
+    try {
+      final hasPermission = await NotificationService().hasExactAlarmPermission();
+      if (mounted) {
+        setState(() {
+          _exactAlarmPermission = hasPermission;
+        });
+      }
+    } catch (e) {
+      // Игнорируем ошибки проверки разрешений
+    }
   }
 
   Future<void> _loadUserProfile() async {
@@ -44,6 +63,111 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _loadNotificationSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('notifications_enabled') ?? true;
+      if (mounted) {
+        setState(() {
+          _notificationsEnabled = enabled;
+        });
+      }
+    } catch (e) {
+      // Игнорируем ошибки загрузки настроек
+    }
+  }
+
+  Future<void> _toggleNotifications(bool value) async {
+    setState(() {
+      _notificationsEnabled = value;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_enabled', value);
+
+      if (!value) {
+        // Если отключаем уведомления, отменяем все запланированные
+        await NotificationService().cancelAllNotifications();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Все напоминания отменены'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Напоминания включены'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        // Откатываем изменение
+        setState(() {
+          _notificationsEnabled = !value;
+        });
+      }
+    }
+  }
+
+  Future<void> _requestExactAlarmPermission() async {
+    try {
+      final granted = await NotificationService().requestExactAlarmPermission();
+      if (mounted) {
+        setState(() {
+          _exactAlarmPermission = granted;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                granted == true
+                    ? 'Разрешение на точные будильники предоставлено'
+                    : granted == false
+                        ? 'Разрешение на точные будильники отклонено'
+                        : 'Проверьте разрешения в настройках приложения',
+              ),
+              backgroundColor: granted == true
+                  ? Colors.green
+                  : granted == false
+                      ? Colors.orange
+                      : Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -155,31 +279,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   child: Column(
                     children: [
-                      ListTile(
-                        leading: Container(
+                      SwitchListTile(
+                        value: _notificationsEnabled,
+                        onChanged: _toggleNotifications,
+                        secondary: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.1),
+                            color: _notificationsEnabled
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : Colors.grey.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.notifications, color: Colors.green),
+                          child: Icon(
+                            _notificationsEnabled ? Icons.notifications_active : Icons.notifications_off,
+                            color: _notificationsEnabled ? Colors.green : Colors.grey,
+                          ),
                         ),
-                        title: const Text('Локальные уведомления'),
-                        subtitle: const Text('Включено'),
-                        trailing: const Icon(Icons.check_circle, color: Colors.green),
+                        title: const Text('Напоминания о задачах'),
+                        subtitle: Text(
+                          _notificationsEnabled
+                              ? 'Вы будете получать уведомления'
+                              : 'Уведомления отключены',
+                        ),
+                        activeColor: const Color(0xFF6366F1),
                       ),
                       Divider(height: 1, color: Colors.grey.shade200),
                       ListTile(
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                            color: _exactAlarmPermission == true
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : _exactAlarmPermission == false
+                                    ? Colors.orange.withValues(alpha: 0.1)
+                                    : Colors.grey.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.alarm, color: Color(0xFF6366F1)),
+                          child: Icon(
+                            _exactAlarmPermission == true
+                                ? Icons.alarm_on
+                                : _exactAlarmPermission == false
+                                    ? Icons.alarm_off
+                                    : Icons.alarm,
+                            color: _exactAlarmPermission == true
+                                ? Colors.green
+                                : _exactAlarmPermission == false
+                                    ? Colors.orange
+                                    : Colors.grey,
+                          ),
                         ),
                         title: const Text('Точные будильники'),
-                        subtitle: const Text('Требуется разрешение Android'),
+                        subtitle: Text(
+                          _exactAlarmPermission == true
+                              ? 'Разрешение предоставлено'
+                              : _exactAlarmPermission == false
+                                  ? 'Требуется разрешение'
+                                  : 'Нажмите для проверки',
+                        ),
+                        trailing: _exactAlarmPermission == true
+                            ? const Icon(Icons.check_circle, color: Colors.green)
+                            : const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                        onTap: _exactAlarmPermission != true
+                            ? _requestExactAlarmPermission
+                            : null,
                       ),
                     ],
                   ),

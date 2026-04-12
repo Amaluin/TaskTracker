@@ -18,14 +18,27 @@ class TaskReminderModel {
   });
 
   factory TaskReminderModel.fromJson(Map<String, dynamic> json) {
+    final remindAtStr = json['remind_at'] as String;
+    var remindAt = DateTime.parse(remindAtStr);
+    // Если время пришло как UTC, конвертируем в локальное
+    if (remindAt.isUtc || remindAtStr.endsWith('Z')) {
+      remindAt = remindAt.toLocal();
+    }
+
+    final createdAtStr = json['created_at'] as String;
+    var createdAt = DateTime.parse(createdAtStr);
+    if (createdAt.isUtc || createdAtStr.endsWith('Z')) {
+      createdAt = createdAt.toLocal();
+    }
+
     return TaskReminderModel(
       id: json['id'] as String,
       taskId: json['task_id'] as String,
       userId: json['user_id'] as String,
-      remindAt: DateTime.parse(json['remind_at'] as String),
+      remindAt: remindAt,
       type: json['type'] as String,
       enabled: json['enabled'] as bool,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: createdAt,
     );
   }
 
@@ -34,10 +47,11 @@ class TaskReminderModel {
       'id': id,
       'task_id': taskId,
       'user_id': userId,
-      'remind_at': remindAt.toIso8601String(),
+      // Сохраняем в UTC, чтобы Supabase корректно хранил
+      'remind_at': remindAt.toUtc().toIso8601String(),
       'type': type,
       'enabled': enabled,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
   }
 

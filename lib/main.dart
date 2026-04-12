@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/constants.dart';
-import 'core/responsive_sizes.dart';
 import 'services/notification_service.dart';
+import 'services/reminder_restore_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/tasks/task_list_screen.dart';
 import 'screens/tasks/create_task_screen.dart';
@@ -13,6 +14,17 @@ import 'screens/settings/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Настройка статус бара - светлый фон, тёмные иконки и текст
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Color(0xFFF5F7FA),
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      statusBarBrightness: Brightness.dark,
+    ),
+  );
 
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
@@ -34,9 +46,15 @@ class TaskTrackerApp extends StatelessWidget {
     final baseFontSize = isWeb ? 18.0 : 14.0;
     final titleFontSize = isWeb ? 26.0 : 20.0;
     
-    return MaterialApp(
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
+    return GestureDetector(
+      onTap: () {
+        // Скрываем клавиатуру при тапе на свободную область
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      behavior: HitTestBehavior.translucent,
+      child: MaterialApp(
+        title: AppConstants.appName,
+        debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -66,6 +84,11 @@ class TaskTrackerApp extends StatelessWidget {
           elevation: 0,
           backgroundColor: Colors.transparent,
           foregroundColor: const Color(0xFF1F2937),
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Color(0xFFF5F7FA),
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.dark,
+          ),
           titleTextStyle: TextStyle(
             color: const Color(0xFF1F2937),
             fontSize: titleFontSize,
@@ -174,6 +197,7 @@ class TaskTrackerApp extends StatelessWidget {
         ),
       ),
       home: const EntryWrapper(),
+    ),
     );
   }
 }
@@ -185,11 +209,39 @@ class EntryWrapper extends StatefulWidget {
   State<EntryWrapper> createState() => _EntryWrapperState();
 }
 
-class _EntryWrapperState extends State<EntryWrapper> {
+class _EntryWrapperState extends State<EntryWrapper> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _setupAuthListener();
+    _restoreRemindersOnStartup();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // При возврате в фокус восстанавливаем напоминания
+    if (state == AppLifecycleState.resumed) {
+      _restoreRemindersOnStartup();
+    }
+  }
+
+  Future<void> _restoreRemindersOnStartup() async {
+    try {
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null) {
+        await ReminderRestoreService().restoreRemindersAfterBoot();
+      }
+    } catch (e) {
+      print('⚠️ Ошибка при восстановлении напоминаний: $e');
+    }
   }
 
   void _setupAuthListener() {
@@ -224,8 +276,31 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  bool _hasShownPermissionDialog = false;
 
   final List<Widget> _screens = const [TaskListScreen(), SettingsScreen()];
+
+  @override
+  void initState() {
+    super.initState();
+    // Проверяем разрешения после первого фрейма
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAlarmPermission();
+    });
+  }
+
+  Future<void> _checkAlarmPermission() async {
+    if (_hasShownPermissionDialog) return;
+    _hasShownPermissionDialog = true;
+
+    final notificationService = NotificationService();
+    final hasPermission = await notificationService.hasExactAlarmPermission();
+
+    // Показываем полный диалог если нет разрешения на будильники
+    if (hasPermission == false && mounted) {
+      await notificationService.showAllPermissionsDialog(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
