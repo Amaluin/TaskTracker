@@ -116,6 +116,13 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
         scheduledDate: remindAt,
         payload: widget.taskId,
       );
+      if (mounted) {
+        await NotificationService().showSystemAlarmDialog(
+          context,
+          scheduledDate: remindAt,
+          taskTitle: widget.taskTitle,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,6 +162,13 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
         scheduledDate: reminder.remindAt,
         payload: widget.taskId,
       );
+      if (mounted) {
+        await NotificationService().showSystemAlarmDialog(
+          context,
+          scheduledDate: reminder.remindAt,
+          taskTitle: widget.taskTitle,
+        );
+      }
     }
     await ref
         .read(remindersProvider.notifier)

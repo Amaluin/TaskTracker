@@ -50,12 +50,28 @@ class NotificationService {
   final bool? _isIOSOverride;
   bool _isInitialized = false;
 
+  String _stageIcon(String stage) {
+    if (stage.contains('system-alarm')) return '🔔';
+    if (stage.contains('clock-fallback')) return '🧭';
+    if (stage.contains('schedule')) return '⏰';
+    if (stage.contains('permission')) return '🔐';
+    if (stage.contains('android-channel')) return '📢';
+    if (stage.contains('battery')) return '🔋';
+    if (stage.contains('xiaomi')) return '📱';
+    if (stage.contains('init')) return '🚀';
+    if (stage.contains('cancel')) return '🧹';
+    if (stage.contains('pending')) return '📋';
+    return 'ℹ️';
+  }
+
   void _log(String stage, String message) {
-    debugPrint('[NotificationService][$stage] $message');
+    final icon = _stageIcon(stage);
+    debugPrint('$icon [NotificationService][$stage] $message');
   }
 
   void _logError(String stage, Object error, [StackTrace? stackTrace]) {
-    debugPrint('[NotificationService][$stage][ERROR] $error');
+    final icon = _stageIcon(stage);
+    debugPrint('❌ $icon [NotificationService][$stage][ERROR] $error');
     if (stackTrace != null) {
       debugPrint('$stackTrace');
     }
@@ -226,6 +242,132 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
     _log('ios-init', 'completed');
+  }
+
+  Future<bool> openSystemAlarmApp({
+    required DateTime scheduledDate,
+    required String label,
+    bool skipUi = false,
+  }) async {
+    if (_isWeb || !_isAndroid) return false;
+
+    _log(
+      'system-alarm',
+      'open SET_ALARM hour=${scheduledDate.hour} minute=${scheduledDate.minute} skipUi=$skipUi',
+    );
+    final setAlarmIntent = AndroidIntent(
+      action: 'android.intent.action.SET_ALARM',
+      arguments: <String, dynamic>{
+        'android.intent.extra.alarm.HOUR': scheduledDate.hour,
+        'android.intent.extra.alarm.MINUTES': scheduledDate.minute,
+        'android.intent.extra.alarm.MESSAGE': label,
+        'android.intent.extra.alarm.SKIP_UI': skipUi,
+      },
+    );
+
+    final setAlarmOpened = await _launchIntent(
+      setAlarmIntent,
+      stage: 'system-alarm',
+    );
+    if (setAlarmOpened) return true;
+
+    _log('system-alarm', 'SET_ALARM failed, fallback to clock app');
+    return openClockApp();
+  }
+
+  Future<bool> openClockApp() async {
+    if (_isWeb || !_isAndroid) return false;
+
+    final intents = <AndroidIntent>[
+      const AndroidIntent(action: 'android.intent.action.SHOW_ALARMS'),
+      const AndroidIntent(
+        action: 'android.intent.action.MAIN',
+        category: 'android.intent.category.APP_CLOCK',
+      ),
+    ];
+
+    for (var i = 0; i < intents.length; i++) {
+      final opened = await _launchIntent(
+        intents[i],
+        stage: 'clock-fallback-$i',
+      );
+      if (opened) return true;
+    }
+    return false;
+  }
+
+  Future<bool> _launchIntent(
+    AndroidIntent intent, {
+    required String stage,
+  }) async {
+    try {
+      final canResolve = await intent.canResolveActivity();
+      _log(stage, 'canResolveActivity=$canResolve');
+      if (canResolve != true) return false;
+      await intent.launch();
+      _log(stage, 'intent launched');
+      return true;
+    } catch (e, st) {
+      _logError(stage, e, st);
+      return false;
+    }
+  }
+
+  Future<void> showSystemAlarmDialog(
+    BuildContext context, {
+    required DateTime scheduledDate,
+    required String taskTitle,
+  }) async {
+    if (_isWeb || !_isAndroid) return;
+
+    final now = DateTime.now();
+    final isSameDay =
+        now.year == scheduledDate.year &&
+        now.month == scheduledDate.month &&
+        now.day == scheduledDate.day;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Добавить в будильник телефона?'),
+        content: Text(
+          isSameDay
+              ? 'Можно открыть системный будильник и подставить время автоматически.'
+              : 'Android будильник обычно ставится по времени, а не по точной дате. '
+                    'Проверьте дату после открытия приложения Часы.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Нет'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final opened = await openSystemAlarmApp(
+                scheduledDate: scheduledDate,
+                label: taskTitle,
+              );
+              if (context.mounted && !opened) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Не удалось открыть создание будильника. Откройте приложение Часы вручную.',
+                    ),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Открыть будильник'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _configureLocalTimezone() async {

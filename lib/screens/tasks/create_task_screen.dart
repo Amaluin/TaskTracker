@@ -151,18 +151,21 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             await ref.read(remindersProvider.notifier).addReminder(reminder);
 
             print('🔔 Планируем уведомление');
-            // Уведомление запланируется в фоне, ошибки не критичны
-            NotificationService()
-                .scheduleNotification(
-                  id: reminder.id.hashCode,
-                  title: task.title,
-                  body: task.title,
-                  scheduledDate: _dueDate!,
-                  payload: task.id,
-                )
-                .catchError((e) {
-                  print('⚠️ Не удалось запланировать уведомление: $e');
-                });
+            await NotificationService().scheduleNotification(
+              id: reminder.id.hashCode,
+              title: task.title,
+              body: task.title,
+              scheduledDate: _dueDate!,
+              payload: task.id,
+            );
+
+            if (mounted) {
+              await NotificationService().showSystemAlarmDialog(
+                context,
+                scheduledDate: _dueDate!,
+                taskTitle: task.title,
+              );
+            }
 
             print('✅ Напоминание создано успешно');
 

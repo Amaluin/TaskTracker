@@ -167,6 +167,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         scheduledDate: reminder.remindAt,
         payload: widget.task.id,
       );
+      if (mounted) {
+        await NotificationService().showSystemAlarmDialog(
+          context,
+          scheduledDate: reminder.remindAt,
+          taskTitle: widget.task.title,
+        );
+      }
     }
 
     if (mounted) {
@@ -224,6 +231,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         scheduledDate: postponeUntil,
         payload: widget.task.id,
       );
+      if (mounted) {
+        await NotificationService().showSystemAlarmDialog(
+          context,
+          scheduledDate: postponeUntil,
+          taskTitle: widget.task.title,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
