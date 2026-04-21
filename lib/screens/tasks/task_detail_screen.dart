@@ -127,7 +127,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   Future<void> _acceptTask() async {
     // Принять задачу и создать напоминание
     final user = Supabase.instance.client.auth.currentUser;
-    
+
     if (user == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -162,8 +162,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
       await NotificationService().scheduleNotification(
         id: reminder.id.hashCode,
-        title: 'Напоминание о задаче',
-        body: 'Задача "${widget.task.title}" должна быть выполнена через час',
+        title: widget.task.title,
+        body: widget.task.title,
         scheduledDate: reminder.remindAt,
         payload: widget.task.id,
       );
@@ -184,7 +184,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
     if (postponeUntil != null) {
       final user = Supabase.instance.client.auth.currentUser;
-      
+
       if (user == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -219,8 +219,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
       await NotificationService().scheduleNotification(
         id: reminder.id.hashCode,
-        title: 'Отложенная задача',
-        body: 'Задача "${widget.task.title}" отложена до этого времени',
+        title: widget.task.title,
+        body: widget.task.title,
         scheduledDate: postponeUntil,
         payload: widget.task.id,
       );
@@ -269,7 +269,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ReminderScreen(taskId: widget.task.id),
+        builder: (context) => ReminderScreen(
+          taskId: widget.task.id,
+          taskTitle: widget.task.title,
+        ),
       ),
     );
   }
@@ -377,7 +380,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     icon: const Icon(Icons.check),
                     label: const Text(
                       'Сохранить изменения',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -498,7 +504,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   setState(() => _status = status);
                   // Автоматически сохраняем изменение статуса
                   final updatedTask = widget.task.copyWith(status: status);
-                  await ref.read(tasksProvider.notifier).updateTask(updatedTask);
+                  await ref
+                      .read(tasksProvider.notifier)
+                      .updateTask(updatedTask);
                 }
               },
               selectedColor: statusColor.withValues(alpha: 0.2),
@@ -571,7 +579,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   setState(() => _priority = priority);
                   // Автоматически сохраняем изменение приоритета
                   final updatedTask = widget.task.copyWith(priority: priority);
-                  await ref.read(tasksProvider.notifier).updateTask(updatedTask);
+                  await ref
+                      .read(tasksProvider.notifier)
+                      .updateTask(updatedTask);
                 }
               },
               selectedColor: priorityColor.withValues(alpha: 0.2),
@@ -618,7 +628,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: Color(0xFF6366F1)),
+                      const Icon(
+                        Icons.calendar_today,
+                        color: Color(0xFF6366F1),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -695,12 +708,16 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 final currentUserId = currentUser?.id;
 
                 // Преобразуем пустую строку в null для дропдауна
-                final assignedUserId = widget.task.assignedToUserId?.isEmpty ?? true
+                final assignedUserId =
+                    widget.task.assignedToUserId?.isEmpty ?? true
                     ? null
                     : widget.task.assignedToUserId;
 
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.8),
                     borderRadius: BorderRadius.circular(16),
@@ -710,10 +727,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     child: DropdownButton<String?>(
                       value: assignedUserId,
                       isExpanded: true,
-                      icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF6366F1)),
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Color(0xFF6366F1),
+                      ),
                       hint: const Row(
                         children: [
-                          Icon(Icons.person_outline, color: Colors.grey, size: 20),
+                          Icon(
+                            Icons.person_outline,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
                           SizedBox(width: 12),
                           Text('Выберите ответственного'),
                         ],
@@ -727,19 +751,19 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                               Icon(
                                 Icons.person,
                                 size: 20,
-                                color: isCurrentUser 
-                                    ? const Color(0xFF6366F1) 
+                                color: isCurrentUser
+                                    ? const Color(0xFF6366F1)
                                     : Colors.grey[600],
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  isCurrentUser 
+                                  isCurrentUser
                                       ? '${user.displayText} (Я)'
                                       : user.displayText,
                                   style: TextStyle(
-                                    fontWeight: isCurrentUser 
-                                        ? FontWeight.w600 
+                                    fontWeight: isCurrentUser
+                                        ? FontWeight.w600
                                         : FontWeight.normal,
                                     color: isCurrentUser
                                         ? const Color(0xFF6366F1)
@@ -751,29 +775,37 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                           ),
                         );
                       }).toList(),
-                      onChanged: _isEditing ? null : (String? newUserId) async {
-                        if (newUserId == null) return;
-                        
-                        // Находим имя пользователя
-                        final user = users.firstWhere((u) => u.id == newUserId);
-                        final userName = user.displayText;
+                      onChanged: _isEditing
+                          ? null
+                          : (String? newUserId) async {
+                              if (newUserId == null) return;
 
-                        // Обновляем задачу
-                        final updatedTask = widget.task.copyWith(
-                          assignedToUserId: newUserId,
-                          assignedToUserName: userName,
-                        );
-                        await ref.read(tasksProvider.notifier).updateTask(updatedTask);
+                              // Находим имя пользователя
+                              final user = users.firstWhere(
+                                (u) => u.id == newUserId,
+                              );
+                              final userName = user.displayText;
 
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Задача назначена пользователю $userName'),
-                              backgroundColor: const Color(0xFF6366F1),
-                            ),
-                          );
-                        }
-                      },
+                              // Обновляем задачу
+                              final updatedTask = widget.task.copyWith(
+                                assignedToUserId: newUserId,
+                                assignedToUserName: userName,
+                              );
+                              await ref
+                                  .read(tasksProvider.notifier)
+                                  .updateTask(updatedTask);
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Задача назначена пользователю $userName',
+                                    ),
+                                    backgroundColor: const Color(0xFF6366F1),
+                                  ),
+                                );
+                              }
+                            },
                     ),
                   ),
                 );
@@ -809,7 +841,11 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.person_outline, color: Colors.grey, size: 20),
+                    const Icon(
+                      Icons.person_outline,
+                      color: Colors.grey,
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       widget.task.assignedToUserName ?? 'Не назначен',
@@ -834,11 +870,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.schedule,
-                  color: Color(0xFF8B5CF6),
-                  size: 20,
-                ),
+                const Icon(Icons.schedule, color: Color(0xFF8B5CF6), size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -941,11 +973,10 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             final remindersAsync = ref.watch(remindersProvider);
             return remindersAsync.when(
               data: (reminders) {
-                final taskReminders = reminders
-                    .where((r) => r.taskId == widget.task.id)
-                    .toList()
-                  ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
-                
+                final taskReminders =
+                    reminders.where((r) => r.taskId == widget.task.id).toList()
+                      ..sort((a, b) => a.remindAt.compareTo(b.remindAt));
+
                 if (taskReminders.isEmpty) {
                   return InkWell(
                     onTap: _openReminders,
@@ -999,7 +1030,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     ),
                   );
                 }
-                
+
                 return Column(
                   children: taskReminders.map((reminder) {
                     final now = DateTime.now();
@@ -1010,7 +1041,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                     final isUpcoming = remindAtLocal.isAfter(now);
                     final isPast = !isUpcoming;
                     final timeUntil = remindAtLocal.difference(now);
-                    
+
                     String timeText;
                     if (isPast) {
                       timeText = 'Прошло';
@@ -1035,7 +1066,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         timeText = 'Через $days дн';
                       }
                     }
-                    
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
@@ -1050,7 +1081,9 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                         boxShadow: reminder.enabled && isUpcoming
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                                  color: const Color(
+                                    0xFF6366F1,
+                                  ).withValues(alpha: 0.1),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -1070,15 +1103,17 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
                                     color: reminder.enabled && isUpcoming
-                                        ? const Color(0xFF6366F1).withValues(alpha: 0.1)
+                                        ? const Color(
+                                            0xFF6366F1,
+                                          ).withValues(alpha: 0.1)
                                         : Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
                                     reminder.enabled
                                         ? (isUpcoming
-                                            ? Icons.notifications_active
-                                            : Icons.notifications)
+                                              ? Icons.notifications_active
+                                              : Icons.notifications)
                                         : Icons.notifications_off,
                                     color: reminder.enabled && isUpcoming
                                         ? const Color(0xFF6366F1)
@@ -1089,7 +1124,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
@@ -1107,16 +1143,21 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                                               ),
                                             ),
                                           ),
-                                          if (isUpcoming && reminder.enabled) ...[
+                                          if (isUpcoming &&
+                                              reminder.enabled) ...[
                                             const SizedBox(width: 8),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                                                borderRadius: BorderRadius.circular(6),
+                                                color: const Color(
+                                                  0xFF6366F1,
+                                                ).withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
                                               ),
                                               child: Text(
                                                 timeText,
@@ -1153,13 +1194,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
                                           if (!reminder.enabled) ...[
                                             const SizedBox(width: 8),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
                                               decoration: BoxDecoration(
                                                 color: Colors.grey.shade200,
-                                                borderRadius: BorderRadius.circular(4),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
                                               ),
                                               child: Text(
                                                 'Выключено',
@@ -1273,14 +1316,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey[600])),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
       ),
     );

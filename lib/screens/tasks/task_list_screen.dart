@@ -27,8 +27,10 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         final status = AppConstants.allStatuses[_tabController.index];
-        ref.read(filterStatusProvider.notifier).state = status;
-        ref.read(tasksProvider.notifier).loadTasks(status: status);
+        // Загружаем задачи при переключении таба (свайп или тап)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(tasksProvider.notifier).loadTasks(status: status);
+        });
       }
     });
   }
@@ -165,57 +167,61 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
               )
             : null,
       ),
-      body: Consumer(
-        builder: (context, ref, child) {
-          final tasksAsync = ref.watch(filteredTasksProvider);
-
-          return tasksAsync.when(
-            data: (tasks) {
-              if (isWideScreen) {
-                return _buildKanbanView(tasks);
-              } else {
-                return _buildListView(tasks);
-              }
-            },
-            loading: () => const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF6366F1),
-              ),
+      body: isWideScreen
+          ? Consumer(
+              builder: (context, ref, child) {
+                final tasksAsync = ref.watch(filteredTasksProvider);
+                return tasksAsync.when(
+                  data: (tasks) => _buildKanbanView(tasks),
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF6366F1),
+                    ),
+                  ),
+                  error: (error, stack) => Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: Colors.red,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Ошибка загрузки',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          error.toString(),
+                          style: Theme.of(context).textTheme.bodySmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            ref.read(tasksProvider.notifier).loadTasks();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Повторить'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            )
+          : Consumer(
+              builder: (context, ref, child) {
+                return TabBarView(
+                  controller: _tabController,
+                  children: AppConstants.allStatuses.map((status) {
+                    return _buildTabContent(ref, status);
+                  }).toList(),
+                );
+              },
             ),
-            error: (error, stack) => Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Ошибка загрузки',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    error.toString(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      ref.read(tasksProvider.notifier).loadTasks();
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Повторить'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -291,7 +297,56 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen>
     );
   }
 
-  Widget _buildListView(List<TaskModel> tasks) {
+  Widget _buildTabContent(WidgetRef ref, String status) {
+    // Слушаем tasksProvider напрямую — все задачи загружены, фильтруем локально
+    final tasksAsync = ref.watch(tasksProvider);
+
+    return tasksAsync.when(
+      data: (tasks) {
+        // Фильтруем по статусу текущего таба локально
+        final statusTasks = tasks.where((t) => t.status == status).toList();
+        return _buildTaskList(statusTasks);
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF6366F1),
+        ),
+      ),
+      error: (error, stack) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Colors.red,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Ошибка загрузки',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                ref.read(tasksProvider.notifier).loadTasks();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Повторить'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTaskList(List<TaskModel> tasks) {
     if (tasks.isEmpty) {
       return Center(
         child: Column(

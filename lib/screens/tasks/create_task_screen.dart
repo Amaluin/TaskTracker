@@ -66,9 +66,7 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
               surface: Colors.white,
               onSurface: Color(0xFF1F2937),
             ),
-            dialogTheme: const DialogThemeData(
-              backgroundColor: Colors.white,
-            ),
+            dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
           ),
           child: child!,
         );
@@ -154,22 +152,26 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
 
             print('🔔 Планируем уведомление');
             // Уведомление запланируется в фоне, ошибки не критичны
-            NotificationService().scheduleNotification(
-              id: reminder.id.hashCode,
-              title: 'Напоминание о задаче',
-              body: 'Задача "${task.title}" должна быть выполнена',
-              scheduledDate: _dueDate!,
-              payload: task.id,
-            ).catchError((e) {
-              print('⚠️ Не удалось запланировать уведомление: $e');
-            });
+            NotificationService()
+                .scheduleNotification(
+                  id: reminder.id.hashCode,
+                  title: task.title,
+                  body: task.title,
+                  scheduledDate: _dueDate!,
+                  payload: task.id,
+                )
+                .catchError((e) {
+                  print('⚠️ Не удалось запланировать уведомление: $e');
+                });
 
             print('✅ Напоминание создано успешно');
 
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Напоминание установлено на ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year} ${_dueDate!.hour}:${_dueDate!.minute.toString().padLeft(2, '0')}'),
+                  content: Text(
+                    'Напоминание установлено на ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year} ${_dueDate!.hour}:${_dueDate!.minute.toString().padLeft(2, '0')}',
+                  ),
                   backgroundColor: Colors.green,
                   duration: const Duration(seconds: 2),
                 ),
@@ -182,7 +184,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
             // Показываем предупреждение, но не останавливаем процесс
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Задача создана, но не удалось установить напоминание: $reminderError'),
+                content: Text(
+                  'Задача создана, но не удалось установить напоминание: $reminderError',
+                ),
                 backgroundColor: Colors.orange,
                 duration: const Duration(seconds: 4),
                 action: SnackBarAction(
@@ -258,7 +262,10 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                         hintText: 'Добавьте описание задачи',
                         prefixIcon: Padding(
                           padding: EdgeInsets.only(bottom: 60),
-                          child: Icon(Icons.description, color: Color(0xFF6366F1)),
+                          child: Icon(
+                            Icons.description,
+                            color: Color(0xFF6366F1),
+                          ),
                         ),
                         alignLabelWithHint: true,
                       ),
@@ -276,41 +283,52 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: AppConstants.allStatuses
-                          .where((status) => status != AppConstants.statusArchived)
+                          .where(
+                            (status) => status != AppConstants.statusArchived,
+                          )
                           .map((status) {
-                        final statusColor = getStatusColor(status);
-                        final isSelected = _status == status;
-                        return ChoiceChip(
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _getStatusIcon(status),
-                                size: 16,
-                                color: isSelected ? statusColor : Colors.grey[600],
+                            final statusColor = getStatusColor(status);
+                            final isSelected = _status == status;
+                            return ChoiceChip(
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _getStatusIcon(status),
+                                    size: 16,
+                                    color: isSelected
+                                        ? statusColor
+                                        : Colors.grey[600],
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(getStatusDisplayName(status)),
+                                ],
                               ),
-                              const SizedBox(width: 6),
-                              Text(getStatusDisplayName(status)),
-                            ],
-                          ),
-                          selected: isSelected,
-                          onSelected: (selected) {
-                            setState(() => _status = status);
-                          },
-                          selectedColor: statusColor.withValues(alpha: 0.2),
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: isSelected ? statusColor : Colors.grey[700],
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                          side: BorderSide(
-                            color: isSelected ? statusColor : Colors.grey.shade300,
-                            width: isSelected ? 2 : 1,
-                          ),
-                          elevation: isSelected ? 2 : 0,
-                          shadowColor: statusColor.withValues(alpha: 0.3),
-                        );
-                      }).toList(),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() => _status = status);
+                              },
+                              selectedColor: statusColor.withValues(alpha: 0.2),
+                              backgroundColor: Colors.white,
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? statusColor
+                                    : Colors.grey[700],
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? statusColor
+                                    : Colors.grey.shade300,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              elevation: isSelected ? 2 : 0,
+                              shadowColor: statusColor.withValues(alpha: 0.3),
+                            );
+                          })
+                          .toList(),
                     ),
                     const SizedBox(height: 24),
                     Text(
@@ -348,7 +366,9 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                               Icon(
                                 priorityIcon,
                                 size: 16,
-                                color: isSelected ? priorityColor : Colors.grey[600],
+                                color: isSelected
+                                    ? priorityColor
+                                    : Colors.grey[600],
                               ),
                               const SizedBox(width: 6),
                               Text(getPriorityDisplayName(priority)),
@@ -361,11 +381,17 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                           selectedColor: priorityColor.withValues(alpha: 0.2),
                           backgroundColor: Colors.white,
                           labelStyle: TextStyle(
-                            color: isSelected ? priorityColor : Colors.grey[700],
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            color: isSelected
+                                ? priorityColor
+                                : Colors.grey[700],
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                           side: BorderSide(
-                            color: isSelected ? priorityColor : Colors.grey.shade300,
+                            color: isSelected
+                                ? priorityColor
+                                : Colors.grey.shade300,
                             width: isSelected ? 2 : 1,
                           ),
                           elevation: isSelected ? 2 : 0,
@@ -392,9 +418,13 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                             final currentUser = currentUserAsync.value;
                             final currentUserId = currentUser?.id;
 
-                            print('🔍 Загружено пользователей: ${users.length}');
+                            print(
+                              '🔍 Загружено пользователей: ${users.length}',
+                            );
                             print('🔍 Текущий пользователь ID: $currentUserId');
-                            print('🔍 Выбранный пользователь ID: $_selectedUserId');
+                            print(
+                              '🔍 Выбранный пользователь ID: $_selectedUserId',
+                            );
 
                             // Если список пользователей пуст, показываем предупреждение
                             if (users.isEmpty) {
@@ -403,16 +433,24 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.orange.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.orange.shade200),
+                                  border: Border.all(
+                                    color: Colors.orange.shade200,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                                    const Icon(
+                                      Icons.warning_amber_rounded,
+                                      color: Colors.orange,
+                                      size: 20,
+                                    ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
                                         'Не удалось загрузить пользователей. Задача будет назначена на вас.',
-                                        style: TextStyle(color: Colors.orange[700]),
+                                        style: TextStyle(
+                                          color: Colors.orange[700],
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -421,19 +459,25 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                             }
 
                             // Если пользователь не выбран, выбираем текущего
-                            if (_selectedUserId == null && currentUserId != null) {
+                            if (_selectedUserId == null &&
+                                currentUserId != null) {
                               WidgetsBinding.instance.addPostFrameCallback((_) {
                                 if (mounted) {
                                   setState(() {
                                     _selectedUserId = currentUserId;
                                   });
-                                  print('✅ Автоматически выбран текущий пользователь: $currentUserId');
+                                  print(
+                                    '✅ Автоматически выбран текущий пользователь: $currentUserId',
+                                  );
                                 }
                               });
                             }
 
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.8),
                                 borderRadius: BorderRadius.circular(16),
@@ -443,10 +487,14 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                                 child: DropdownButton<String>(
                                   value: _selectedUserId,
                                   isExpanded: true,
-                                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF6366F1)),
+                                  icon: const Icon(
+                                    Icons.arrow_drop_down,
+                                    color: Color(0xFF6366F1),
+                                  ),
                                   hint: const Text('Выберите пользователя'),
                                   items: users.map((user) {
-                                    final isCurrentUser = user.id == currentUserId;
+                                    final isCurrentUser =
+                                        user.id == currentUserId;
                                     return DropdownMenuItem<String>(
                                       value: user.id,
                                       child: Row(
@@ -454,19 +502,19 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                                           Icon(
                                             Icons.person,
                                             size: 20,
-                                            color: isCurrentUser 
-                                                ? const Color(0xFF6366F1) 
+                                            color: isCurrentUser
+                                                ? const Color(0xFF6366F1)
                                                 : Colors.grey[600],
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Text(
-                                              isCurrentUser 
+                                              isCurrentUser
                                                   ? '${user.displayText} (Я)'
                                                   : user.displayText,
                                               style: TextStyle(
-                                                fontWeight: isCurrentUser 
-                                                    ? FontWeight.w600 
+                                                fontWeight: isCurrentUser
+                                                    ? FontWeight.w600
                                                     : FontWeight.normal,
                                                 color: isCurrentUser
                                                     ? const Color(0xFF6366F1)
@@ -517,16 +565,24 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.orange.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.orange.shade200),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
+                                ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                                  const Icon(
+                                    Icons.warning_amber_rounded,
+                                    color: Colors.orange,
+                                    size: 20,
+                                  ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
                                       'Не удалось загрузить пользователей. Задача будет назначена на вас.',
-                                      style: TextStyle(color: Colors.orange[700]),
+                                      style: TextStyle(
+                                        color: Colors.orange[700],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -557,7 +613,10 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Color(0xFF6366F1)),
+                            const Icon(
+                              Icons.calendar_today,
+                              color: Color(0xFF6366F1),
+                            ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -575,7 +634,8 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                             if (_dueDate != null)
                               IconButton(
                                 icon: const Icon(Icons.clear, size: 20),
-                                onPressed: () => setState(() => _dueDate = null),
+                                onPressed: () =>
+                                    setState(() => _dueDate = null),
                                 color: Colors.grey[600],
                               ),
                           ],
@@ -611,13 +671,18 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Icon(Icons.check),
                   label: Text(
                     _isLoading ? 'Сохранение...' : 'Сохранить задачу',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),

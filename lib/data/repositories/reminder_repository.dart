@@ -10,7 +10,7 @@ class ReminderRepository {
     if (user != null) {
       return user.id;
     }
-    
+
     // Если пользователь не авторизован через Supabase, возвращаем null
     return null;
   }
@@ -18,7 +18,9 @@ class ReminderRepository {
   Future<List<TaskReminderModel>> getRemindersForTask(String taskId) async {
     final userId = await _getUserId();
     if (userId == null || userId.isEmpty) {
-      throw Exception('Пользователь не авторизован. Пожалуйста, войдите в систему.');
+      throw Exception(
+        'Пользователь не авторизован. Пожалуйста, войдите в систему.',
+      );
     }
 
     final data = await _client
@@ -30,10 +32,28 @@ class ReminderRepository {
     return (data as List).map((e) => TaskReminderModel.fromJson(e)).toList();
   }
 
+  Future<void> deleteExpiredRemindersForTask(String taskId) async {
+    final userId = await _getUserId();
+    if (userId == null || userId.isEmpty) {
+      throw Exception(
+        'Пользователь не авторизован. Пожалуйста, войдите в систему.',
+      );
+    }
+
+    await _client
+        .from('task_reminders')
+        .delete()
+        .eq('task_id', taskId)
+        .eq('user_id', userId)
+        .lt('remind_at', DateTime.now().toUtc().toIso8601String());
+  }
+
   Future<List<TaskReminderModel>> getAllReminders() async {
     final userId = await _getUserId();
     if (userId == null || userId.isEmpty) {
-      throw Exception('Пользователь не авторизован. Пожалуйста, войдите в систему.');
+      throw Exception(
+        'Пользователь не авторизован. Пожалуйста, войдите в систему.',
+      );
     }
 
     final data = await _client
@@ -43,6 +63,21 @@ class ReminderRepository {
         .eq('enabled', true)
         .order('remind_at', ascending: true);
     return (data as List).map((e) => TaskReminderModel.fromJson(e)).toList();
+  }
+
+  Future<void> deleteAllExpiredReminders() async {
+    final userId = await _getUserId();
+    if (userId == null || userId.isEmpty) {
+      throw Exception(
+        'Пользователь не авторизован. Пожалуйста, войдите в систему.',
+      );
+    }
+
+    await _client
+        .from('task_reminders')
+        .delete()
+        .eq('user_id', userId)
+        .lt('remind_at', DateTime.now().toUtc().toIso8601String());
   }
 
   Future<TaskReminderModel> createReminder(TaskReminderModel reminder) async {

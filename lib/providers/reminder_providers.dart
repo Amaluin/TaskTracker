@@ -25,6 +25,7 @@ class RemindersNotifier
 
   Future<void> loadRemindersForTask(String taskId) async {
     try {
+      await _repository.deleteExpiredRemindersForTask(taskId);
       final reminders = await _repository.getRemindersForTask(taskId);
       state = AsyncValue.data(reminders);
     } catch (e, stack) {
@@ -35,6 +36,7 @@ class RemindersNotifier
   Future<void> loadAllReminders() async {
     try {
       state = const AsyncValue.loading();
+      await _repository.deleteAllExpiredReminders();
       final reminders = await _repository.getAllReminders();
       state = AsyncValue.data(reminders);
     } catch (e, stack) {

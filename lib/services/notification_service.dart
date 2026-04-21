@@ -1,56 +1,141 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'dart:io' show Platform;
 import '../core/constants.dart';
-import 'web_notification_service.dart' if (dart.library.io) 'web_notification_service_stub.dart';
+import 'web_notification_service.dart'
+    if (dart.library.io) 'web_notification_service_stub.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
-  NotificationService._internal();
+  NotificationService._internal({
+    FlutterLocalNotificationsPlugin? plugin,
+    bool? isWebOverride,
+    bool? isAndroidOverride,
+    bool? isIOSOverride,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       _isWebOverride = isWebOverride,
+       _isAndroidOverride = isAndroidOverride,
+       _isIOSOverride = isIOSOverride;
 
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  @visibleForTesting
+  NotificationService.test({
+    FlutterLocalNotificationsPlugin? plugin,
+    bool? isWebOverride,
+    bool? isAndroidOverride,
+    bool? isIOSOverride,
+  }) : this._internal(
+         plugin: plugin,
+         isWebOverride: isWebOverride,
+         isAndroidOverride: isAndroidOverride,
+         isIOSOverride: isIOSOverride,
+       );
+
+  static const String _alarmChannelId = 'task_tracker_alarm_v1';
+  static const String _alarmChannelName = 'Task reminders';
+  static const String _alarmChannelDescription =
+      'Task Tracker reminder notifications with sound';
+  static const String _androidNotificationIcon = 'ic_notification_task';
+  static const String _androidPackageName = 'com.tasktracker.task_tracker';
+
+  final FlutterLocalNotificationsPlugin _plugin;
+  final bool? _isWebOverride;
+  final bool? _isAndroidOverride;
+  final bool? _isIOSOverride;
   bool _isInitialized = false;
 
+  void _log(String stage, String message) {
+    debugPrint('[NotificationService][$stage] $message');
+  }
+
+  void _logError(String stage, Object error, [StackTrace? stackTrace]) {
+    debugPrint('[NotificationService][$stage][ERROR] $error');
+    if (stackTrace != null) {
+      debugPrint('$stackTrace');
+    }
+  }
+
+  bool get _isXiaomi {
+    if (_isWeb || !_isAndroid) return false;
+    final os = Platform.operatingSystemVersion.toLowerCase();
+    return os.contains('miui') ||
+        os.contains('xiaomi') ||
+        os.contains('redmi') ||
+        os.contains('poco');
+  }
+
+  bool get _isWeb => _isWebOverride ?? kIsWeb;
+  bool get _isAndroid => _isAndroidOverride ?? (!_isWeb && Platform.isAndroid);
+  bool get _isIOS => _isIOSOverride ?? (!_isWeb && Platform.isIOS);
+
+  @visibleForTesting
+  String get alarmChannelId => _alarmChannelId;
+
+  @visibleForTesting
+  AndroidNotificationChannel buildAlarmChannel() {
+    return const AndroidNotificationChannel(
+      _alarmChannelId,
+      _alarmChannelName,
+      description: _alarmChannelDescription,
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
+  }
+
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      _log('init', 'skip, already initialized');
+      return;
+    }
+    _log('init', 'start');
 
     // Веб не поддерживает timezone
-    if (!kIsWeb) {
+    if (!_isWeb) {
+      _log('init-timezone', 'initialize time zones');
       tz_data.initializeTimeZones();
+      await _configureLocalTimezone();
     }
 
-    if (kIsWeb) {
+    if (_isWeb) {
       // Веб: используем Web Notifications API
+      _log('init-platform', 'web initialization');
       await _initializeWeb();
-    } else if (Platform.isAndroid) {
+    } else if (_isAndroid) {
       // Android: используем локальные уведомления
+      _log('init-platform', 'android initialization');
       await _initializeAndroid();
-    } else if (Platform.isIOS) {
+    } else if (_isIOS) {
       // iOS: используем локальные уведомления
+      _log('init-platform', 'ios initialization');
       await _initializeIOS();
     }
 
     _isInitialized = true;
+    _log('init', 'completed');
   }
 
   Future<void> _initializeWeb() async {
     // Для веба используем нативный Web Notifications API
-    if (kIsWeb) {
+    if (_isWeb) {
+      _log('web-init', 'initialize WebNotificationService');
       final webService = WebNotificationService();
       await webService.initialize();
+      _log('web-init', 'completed');
     }
   }
 
   Future<void> _initializeAndroid() async {
+    _log('android-init', 'start');
     const androidSettings = AndroidInitializationSettings(
-      '@mipmap/ic_launcher',
+      '@drawable/ic_notification_task',
     );
     const initSettings = InitializationSettings(android: androidSettings);
 
@@ -58,51 +143,77 @@ class NotificationService {
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
+    _log('android-init', 'plugin initialized');
+
+    await _createAndroidNotificationChannels();
 
     // Запрашиваем разрешение на уведомления для Android 13+
     await _requestNotificationPermission();
 
     // Запрашиваем разрешение на точные будильники для Android 12+
     await _requestExactAlarmPermission();
+    _log('android-init', 'completed');
+  }
+
+  Future<void> _createAndroidNotificationChannels() async {
+    _log('android-channel', 'create/update channel $_alarmChannelId');
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin == null) {
+      _log('android-channel', 'android plugin unavailable, skip');
+      return;
+    }
+    await androidPlugin.createNotificationChannel(buildAlarmChannel());
+    _log('android-channel', 'channel ready');
   }
 
   Future<void> _requestNotificationPermission() async {
-    if (Platform.isAndroid) {
+    if (_isAndroid) {
+      _log('permission-notification', 'request start');
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
+      _log('permission-notification', 'request completed');
     }
   }
 
   Future<void> _requestExactAlarmPermission() async {
-    if (Platform.isAndroid) {
+    if (_isAndroid) {
       try {
-        final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
-        
+        _log('permission-exact-alarm', 'check start');
+        final androidPlugin = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+
         if (androidPlugin != null) {
-          final canScheduleExactAlarms = await androidPlugin.canScheduleExactNotifications();
+          final canScheduleExactAlarms = await androidPlugin
+              .canScheduleExactNotifications();
+          _log(
+            'permission-exact-alarm',
+            'canScheduleExactNotifications=$canScheduleExactAlarms',
+          );
 
           if (canScheduleExactAlarms == false) {
-            print('⚠️ Разрешение на точные будильники не предоставлено, запрашиваем...');
+            _log('permission-exact-alarm', 'request exact alarm permission');
             final granted = await androidPlugin.requestExactAlarmsPermission();
-            if (granted == true) {
-              print('✅ Разрешение на точные будильники получено');
-            } else {
-              print('⚠️ Пользователь не предоставил разрешение на точные будильники');
-            }
-          } else {
-            print('✅ Разрешение на точные будильники уже есть');
+            _log('permission-exact-alarm', 'request result: $granted');
           }
+        } else {
+          _log('permission-exact-alarm', 'android plugin unavailable');
         }
       } catch (e) {
-        print('❌ Ошибка при запросе разрешения на точные будильники: $e');
+        _logError('permission-exact-alarm', e);
       }
     }
   }
 
   Future<void> _initializeIOS() async {
+    _log('ios-init', 'start');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -114,6 +225,19 @@ class NotificationService {
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationResponse,
     );
+    _log('ios-init', 'completed');
+  }
+
+  Future<void> _configureLocalTimezone() async {
+    try {
+      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+      final location = tz.getLocation(timezoneInfo.identifier);
+      tz.setLocalLocation(location);
+      _log('init-timezone', 'local timezone set to ${timezoneInfo.identifier}');
+    } catch (e) {
+      _logError('init-timezone', e);
+      _log('init-timezone', 'fallback to ${tz.local.name}');
+    }
   }
 
   static void _onNotificationResponse(NotificationResponse response) {
@@ -128,14 +252,18 @@ class NotificationService {
     String? payload,
   }) async {
     if (!_isInitialized) {
-      print('⚠️ Notification service not initialized, attempting to initialize...');
+      _log('schedule', 'service not initialized, init before schedule');
       await initialize();
     }
+    _log(
+      'schedule',
+      'start id=$id at=$scheduledDate isUtc=${scheduledDate.isUtc}',
+    );
 
     // Проверяем, включены ли уведомления
     final enabled = await areNotificationsEnabled();
     if (!enabled) {
-      print('🔕 Notifications are disabled, skipping scheduling');
+      _log('schedule', 'notifications disabled, skip');
       return;
     }
 
@@ -154,14 +282,14 @@ class NotificationService {
         scheduledDate.minute,
       );
     }
-    
+
     if (checkDate.isBefore(now)) {
-      print('⚠️ Scheduled date is in the past: $checkDate (now: $now), skipping');
+      _log('schedule', 'date in past ($checkDate), now=$now, skip');
       return;
     }
 
     try {
-      if (kIsWeb) {
+      if (_isWeb) {
         // Веб: используем браузерные уведомления (Windows notifications)
         await _scheduleWebNotification(
           id: id,
@@ -170,7 +298,7 @@ class NotificationService {
           scheduledDate: scheduledDate,
           payload: payload,
         );
-      } else if (Platform.isAndroid || Platform.isIOS) {
+      } else if (_isAndroid || _isIOS) {
         // Мобильные: используем локальные уведомления с будильником
         await _scheduleMobileNotification(
           id: id,
@@ -180,9 +308,9 @@ class NotificationService {
           payload: payload,
         );
       }
-      print('✅ Notification scheduled successfully for $scheduledDate');
+      _log('schedule', 'completed id=$id');
     } catch (e) {
-      print('❌ Error scheduling notification: $e');
+      _logError('schedule', e);
       // Не пробрасываем ошибку, чтобы не ломать основной функционал
     }
   }
@@ -195,6 +323,7 @@ class NotificationService {
     String? payload,
   }) async {
     // Используем нативный Web Notifications API
+    _log('schedule-web', 'start id=$id at=$scheduledDate');
     final webService = WebNotificationService();
     await webService.scheduleNotification(
       id: id,
@@ -202,6 +331,7 @@ class NotificationService {
       body: body,
       scheduledDate: scheduledDate,
     );
+    _log('schedule-web', 'completed id=$id');
   }
 
   Future<void> _scheduleMobileNotification({
@@ -213,7 +343,7 @@ class NotificationService {
   }) async {
     // Получаем часовой пояс устройства
     final now = tz.TZDateTime.now(tz.local);
-    
+
     // Конвертируем запланированное время в правильный часовой пояс
     // Если scheduledDate это local time без timezone info, нужно его правильно интерпретировать
     tz.TZDateTime tzScheduledDate;
@@ -234,22 +364,25 @@ class NotificationService {
       );
     }
 
-    print('🕐 Timezone: ${now.timeZoneName}');
-    print('📅 Scheduled (original): $scheduledDate (isUtc: ${scheduledDate.isUtc})');
-    print('📅 Scheduled (tz): $tzScheduledDate');
+    _log('schedule-mobile', 'timezone=${now.timeZoneName}');
+    _log(
+      'schedule-mobile',
+      'converted date: original=$scheduledDate -> tz=$tzScheduledDate',
+    );
 
-    if (Platform.isAndroid) {
+    if (_isAndroid) {
       // Android: используем будильник (exactAllowWhileIdle)
       const androidDetails = AndroidNotificationDetails(
-        'task_tracker_channel',
-        'Task Tracker',
-        channelDescription: 'Напоминания о задачах',
+        _alarmChannelId,
+        _alarmChannelName,
+        channelDescription: _alarmChannelDescription,
+        icon: _androidNotificationIcon,
         importance: Importance.max,
         priority: Priority.high,
         enableVibration: true,
         playSound: true,
-        fullScreenIntent: true, // Показывать как будильник
-        category: AndroidNotificationCategory.alarm,
+        category: AndroidNotificationCategory.reminder,
+        channelShowBadge: true,
       );
 
       const details = NotificationDetails(android: androidDetails);
@@ -265,7 +398,8 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-    } else if (Platform.isIOS) {
+      _log('schedule-android', 'zonedSchedule completed id=$id');
+    } else if (_isIOS) {
       // iOS: используем локальные уведомления с звуком
       const iosDetails = DarwinNotificationDetails(
         presentAlert: true,
@@ -288,22 +422,48 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
+      _log('schedule-ios', 'zonedSchedule completed id=$id');
     }
   }
 
+  @visibleForTesting
+  NotificationDetails buildAndroidNotificationDetails() {
+    const androidDetails = AndroidNotificationDetails(
+      _alarmChannelId,
+      _alarmChannelName,
+      channelDescription: _alarmChannelDescription,
+      icon: _androidNotificationIcon,
+      importance: Importance.max,
+      priority: Priority.high,
+      enableVibration: true,
+      playSound: true,
+      category: AndroidNotificationCategory.reminder,
+      channelShowBadge: true,
+    );
+    return const NotificationDetails(android: androidDetails);
+  }
+
   Future<void> cancelNotification(int id) async {
+    _log('cancel', 'start id=$id');
     await _plugin.cancel(id);
+    _log('cancel', 'completed id=$id');
   }
 
   Future<void> cancelAllNotifications() async {
+    _log('cancel-all', 'start');
     await _plugin.cancelAll();
+    _log('cancel-all', 'completed');
   }
 
   Future<List<PendingNotificationRequest>> getPendingNotifications() async {
-    return _plugin.pendingNotificationRequests();
+    _log('pending', 'load pending notifications');
+    final pending = await _plugin.pendingNotificationRequests();
+    _log('pending', 'loaded count=${pending.length}');
+    return pending;
   }
 
   Future<void> markNotificationsScheduled() async {
+    _log('prefs', 'mark notifications scheduled=true');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConstants.keyNotificationsScheduled, true);
   }
@@ -314,22 +474,25 @@ class NotificationService {
   }
 
   Future<void> clearNotificationsScheduledFlag() async {
+    _log('prefs', 'clear notifications scheduled flag');
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.keyNotificationsScheduled);
   }
 
   Future<bool> areNotificationsEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('notifications_enabled') ?? true;
+    final enabled = prefs.getBool('notifications_enabled') ?? true;
+    _log('prefs', 'notifications_enabled=$enabled');
+    return enabled;
   }
 
   // Получить информацию о платформе
   String getPlatformInfo() {
-    if (kIsWeb) {
+    if (_isWeb) {
       return 'Web (Windows Notifications)';
-    } else if (Platform.isAndroid) {
+    } else if (_isAndroid) {
       return 'Android (Alarm)';
-    } else if (Platform.isIOS) {
+    } else if (_isIOS) {
       return 'iOS (Local Notification)';
     }
     return 'Unknown';
@@ -337,15 +500,18 @@ class NotificationService {
 
   // Проверить, есть ли разрешение на точные будильники (Android)
   Future<bool?> hasExactAlarmPermission() async {
-    if (Platform.isAndroid) {
+    if (_isWeb) return null;
+    if (_isAndroid) {
       try {
-        final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+        final androidPlugin = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         if (androidPlugin != null) {
           return await androidPlugin.canScheduleExactNotifications();
         }
       } catch (e) {
-        print('❌ Error checking exact alarm permission: $e');
+        _logError('permission-exact-alarm-check', e);
       }
     }
     return null;
@@ -353,17 +519,20 @@ class NotificationService {
 
   // Запросить разрешение на точные будильники (Android)
   Future<bool?> requestExactAlarmPermission() async {
-    if (Platform.isAndroid) {
+    if (_isWeb) return null;
+    if (_isAndroid) {
       try {
-        final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+        final androidPlugin = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         if (androidPlugin != null) {
           final granted = await androidPlugin.requestExactAlarmsPermission();
-          print('✅ Exact alarm permission result: $granted');
+          _log('permission-exact-alarm-request', 'result=$granted');
           return granted;
         }
       } catch (e) {
-        print('❌ Error requesting exact alarm permission: $e');
+        _logError('permission-exact-alarm-request', e);
       }
     }
     return null;
@@ -371,7 +540,7 @@ class NotificationService {
 
   // Показать диалог с инструкцией по включению точных будильников
   Future<void> showExactAlarmPermissionDialog(BuildContext context) async {
-    if (!kIsWeb && Platform.isAndroid) {
+    if (!_isWeb && _isAndroid) {
       return showDialog(
         context: context,
         barrierDismissible: false,
@@ -408,32 +577,97 @@ class NotificationService {
 
   // Открыть настройки оптимизации батареи для Android
   Future<void> openBatteryOptimizationSettings() async {
-    if (!kIsWeb && Platform.isAndroid) {
-      try {
-        final intent = AndroidIntent(
+    if (!_isWeb && _isAndroid) {
+      final attempts = <AndroidIntent>[
+        const AndroidIntent(
           action: 'android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
-          package: 'android',
-        );
-        await intent.launch();
-      } catch (e) {
-        print('❌ Ошибка при открытии настроек батареи: $e');
-        // Fallback — открываем общие настройки приложения
+          data: 'package:$_androidPackageName',
+        ),
+        const AndroidIntent(
+          action: 'android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+        ),
+        const AndroidIntent(
+          action: 'android.settings.APPLICATION_DETAILS_SETTINGS',
+          data: 'package:$_androidPackageName',
+        ),
+      ];
+
+      for (final intent in attempts) {
         try {
-          final intent = AndroidIntent(
-            action: 'android.settings.APPLICATION_DETAILS_SETTINGS',
-            data: 'package:com.example.task_tracker',
+          _log(
+            'battery-settings',
+            'try action=${intent.action} component=${intent.componentName}',
           );
           await intent.launch();
-        } catch (e2) {
-          print('❌ Ошибка при открытии настроек приложения: $e2');
+          _log('battery-settings', 'opened');
+          return;
+        } catch (e) {
+          _logError('battery-settings', e);
         }
       }
+      _log('battery-settings', 'all intents failed');
+    }
+  }
+
+  Future<void> openXiaomiAutostartSettings() async {
+    if (!_isWeb && _isAndroid) {
+      _log(
+        'xiaomi-autostart',
+        'device info: isXiaomi=$_isXiaomi os=${Platform.operatingSystemVersion}',
+      );
+      final attempts = <AndroidIntent>[
+        const AndroidIntent(
+          action: 'miui.intent.action.APP_PERM_EDITOR',
+          componentName:
+              'com.miui.securitycenter/com.miui.permcenter.permissions.PermissionsEditorActivity',
+          arguments: <String, dynamic>{'extra_pkgname': _androidPackageName},
+        ),
+        const AndroidIntent(
+          action: 'miui.intent.action.APP_PERM_EDITOR',
+          componentName:
+              'com.miui.securitycenter/com.miui.permcenter.permissions.AppPermissionsEditorActivity',
+          arguments: <String, dynamic>{'extra_pkgname': _androidPackageName},
+        ),
+        const AndroidIntent(
+          componentName:
+              'com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity',
+        ),
+        const AndroidIntent(
+          componentName:
+              'com.miui.securitycenter/com.miui.appmanager.ApplicationsDetailsActivity',
+          arguments: <String, dynamic>{'package_name': _androidPackageName},
+        ),
+        const AndroidIntent(
+          componentName:
+              'com.miui.powerkeeper/com.miui.powerkeeper.ui.HiddenAppsConfigActivity',
+          arguments: <String, dynamic>{
+            'package_name': _androidPackageName,
+            'package_label': 'Task Tracker',
+          },
+        ),
+        const AndroidIntent(
+          action: 'android.settings.APPLICATION_DETAILS_SETTINGS',
+          data: 'package:$_androidPackageName',
+        ),
+      ];
+
+      for (final intent in attempts) {
+        try {
+          _log('xiaomi-autostart', 'try open ${intent.componentName}');
+          await intent.launch();
+          _log('xiaomi-autostart', 'opened');
+          return;
+        } catch (e) {
+          _logError('xiaomi-autostart', e);
+        }
+      }
+      _log('xiaomi-autostart', 'all intents failed');
     }
   }
 
   // Показать диалог с инструкцией по отключению оптимизации батареи
   Future<void> showBatteryOptimizationDialog(BuildContext context) async {
-    if (!kIsWeb && Platform.isAndroid) {
+    if (!_isWeb && _isAndroid) {
       return showDialog(
         context: context,
         barrierDismissible: true,
@@ -445,7 +679,9 @@ class NotificationService {
             'Пожалуйста, отключите оптимизацию батареи для этого приложения:\n\n'
             '1. Нажмите "Отключить"\n'
             '2. Выберите "Все приложения" или "Не оптимизировать"\n'
-            '3. Найдите "Task Tracker" и выберите "Не оптимизировать"',
+            '3. Найдите "Task Tracker" и выберите "Не оптимизировать"\n\n'
+            'Для Xiaomi/Redmi/Poco дополнительно включите "Автозапуск" '
+            'в приложении Безопасность.',
           ),
           actions: [
             TextButton(
@@ -456,6 +692,8 @@ class NotificationService {
               onPressed: () async {
                 Navigator.pop(ctx);
                 await openBatteryOptimizationSettings();
+                await Future.delayed(const Duration(milliseconds: 300));
+                await openXiaomiAutostartSettings();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6366F1),
@@ -471,7 +709,7 @@ class NotificationService {
 
   // Показать полный диалог с проверкой всех разрешений
   Future<void> showAllPermissionsDialog(BuildContext context) async {
-    if (!kIsWeb && Platform.isAndroid) {
+    if (!_isWeb && _isAndroid) {
       return showDialog(
         context: context,
         barrierDismissible: false,
@@ -481,6 +719,7 @@ class NotificationService {
             'Для надёжной работы напоминаний нужно выполнить два шага:\n\n'
             '1️⃣ Включить "Точные будильники"\n'
             '2️⃣ Отключить оптимизацию батареи\n\n'
+            'Для Xiaomi/Redmi/Poco также включите "Автозапуск".\n\n'
             'Без этого напоминания могут не срабатывать, когда приложение закрыто.',
           ),
           actions: [
@@ -496,6 +735,8 @@ class NotificationService {
                 // Потом оптимизация батареи
                 await Future.delayed(const Duration(milliseconds: 500));
                 await openBatteryOptimizationSettings();
+                await Future.delayed(const Duration(milliseconds: 300));
+                await openXiaomiAutostartSettings();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6366F1),

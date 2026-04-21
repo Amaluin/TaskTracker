@@ -13,8 +13,13 @@ import '../../widgets/ios_time_picker.dart';
 
 class ReminderScreen extends ConsumerStatefulWidget {
   final String taskId;
+  final String taskTitle;
 
-  const ReminderScreen({super.key, required this.taskId});
+  const ReminderScreen({
+    super.key,
+    required this.taskId,
+    required this.taskTitle,
+  });
 
   @override
   ConsumerState<ReminderScreen> createState() => _ReminderScreenState();
@@ -77,7 +82,7 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
     try {
       // Получаем ID пользователя из Supabase auth
       final user = Supabase.instance.client.auth.currentUser;
-      
+
       if (user == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -106,9 +111,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
 
       await NotificationService().scheduleNotification(
         id: reminder.id.hashCode,
-        title: 'Напоминание о задаче',
-        body:
-            'У вас запланировано напоминание на ${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
+        title: widget.taskTitle,
+        body: widget.taskTitle,
         scheduledDate: remindAt,
         payload: widget.taskId,
       );
@@ -146,8 +150,8 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
     } else {
       await NotificationService().scheduleNotification(
         id: reminder.id.hashCode,
-        title: 'Напоминание о задаче',
-        body: 'У вас запланировано напоминание',
+        title: widget.taskTitle,
+        body: widget.taskTitle,
         scheduledDate: reminder.remindAt,
         payload: widget.taskId,
       );
@@ -195,16 +199,15 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
         );
 
         // Перезагружаем список
-        ref.read(remindersProvider.notifier).loadRemindersForTask(widget.taskId);
+        ref
+            .read(remindersProvider.notifier)
+            .loadRemindersForTask(widget.taskId);
       }
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Ошибка: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -242,9 +245,7 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Статус уведомлений'),
-        content: SingleChildScrollView(
-          child: Text(statusText),
-        ),
+        content: SingleChildScrollView(child: Text(statusText)),
         actions: [
           if (Platform.isAndroid)
             TextButton(
@@ -399,7 +400,10 @@ class _ReminderScreenState extends ConsumerState<ReminderScreen> {
                             activeColor: const Color(0xFF6366F1),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
                             onPressed: () => _deleteReminder(reminder),
                           ),
                         ],
