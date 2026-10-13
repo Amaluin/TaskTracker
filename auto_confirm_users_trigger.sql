@@ -18,11 +18,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Удаляем старый триггер если существует
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+-- Удаляем старый триггер автоподтверждения если существует
+-- Важно: не трогаем триггер создания профиля в public.user_profiles
+DROP TRIGGER IF EXISTS on_auth_user_auto_confirm ON auth.users;
 
 -- Создаем триггер на создание пользователя
-CREATE TRIGGER on_auth_user_created
+CREATE TRIGGER on_auth_user_auto_confirm
   BEFORE INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.auto_confirm_user();

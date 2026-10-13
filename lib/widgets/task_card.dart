@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants.dart';
-import '../../core/responsive_sizes.dart';
 import '../../data/models/task_model.dart';
 
 class TaskCard extends StatelessWidget {
@@ -44,16 +44,54 @@ class TaskCard extends StatelessWidget {
     }
   }
 
+  Widget? _buildOwnershipBadge(bool isWeb) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) return null;
+
+    String? label;
+    Color color;
+    if (task.userId == currentUserId) {
+      label = 'Моя';
+      color = const Color(0xFF2563EB);
+    } else if (task.assignedToUserId == currentUserId) {
+      label = 'Назначена мне';
+      color = const Color(0xFF7C3AED);
+    } else {
+      return null;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isWeb ? 14 : 10,
+        vertical: isWeb ? 8 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: isWeb ? 15 : 12,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final priorityColor = _getPriorityColor();
     final statusColor = getStatusColor(task.status);
     final statusBgColor = getStatusBackgroundColor(task.status);
     final isWeb = kIsWeb;
-    
+    final ownershipBadge = _buildOwnershipBadge(isWeb);
+
     return Container(
       margin: EdgeInsets.symmetric(
-        horizontal: isWeb ? 20 : 16, 
+        horizontal: isWeb ? 20 : 16,
         vertical: isWeb ? 10 : 8,
       ),
       child: ClipRRect(
@@ -89,10 +127,7 @@ class TaskCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      statusBgColor,
-                      Colors.white,
-                    ],
+                    colors: [statusBgColor, Colors.white],
                   ),
                   borderRadius: BorderRadius.circular(isWeb ? 24 : 20),
                 ),
@@ -106,7 +141,9 @@ class TaskCard extends StatelessWidget {
                           padding: EdgeInsets.all(isWeb ? 10 : 8),
                           decoration: BoxDecoration(
                             color: statusColor.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(isWeb ? 12 : 10),
+                            borderRadius: BorderRadius.circular(
+                              isWeb ? 12 : 10,
+                            ),
                           ),
                           child: Icon(
                             _getStatusIcon(),
@@ -118,14 +155,15 @@ class TaskCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             task.title,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontSize: isWeb ? 20 : 16,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF1F2937),
-                              decoration: task.status == 'archived'
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  fontSize: isWeb ? 20 : 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF1F2937),
+                                  decoration: task.status == 'archived'
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
                           ),
                         ),
                         SizedBox(width: isWeb ? 12 : 8),
@@ -136,7 +174,9 @@ class TaskCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: priorityColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
+                            borderRadius: BorderRadius.circular(
+                              isWeb ? 16 : 12,
+                            ),
                             border: Border.all(
                               color: priorityColor.withValues(alpha: 0.3),
                             ),
@@ -152,7 +192,8 @@ class TaskCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (task.description != null && task.description!.isNotEmpty) ...[
+                    if (task.description != null &&
+                        task.description!.isNotEmpty) ...[
                       SizedBox(height: isWeb ? 16 : 12),
                       Text(
                         task.description!,
@@ -183,7 +224,9 @@ class TaskCard extends StatelessWidget {
                                     color: task.dueAt!.isBefore(DateTime.now())
                                         ? Colors.red.withValues(alpha: 0.1)
                                         : Colors.blue.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+                                    borderRadius: BorderRadius.circular(
+                                      isWeb ? 10 : 8,
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -191,7 +234,8 @@ class TaskCard extends StatelessWidget {
                                       Icon(
                                         Icons.calendar_today,
                                         size: isWeb ? 18 : 14,
-                                        color: task.dueAt!.isBefore(DateTime.now())
+                                        color:
+                                            task.dueAt!.isBefore(DateTime.now())
                                             ? Colors.red
                                             : Colors.blue,
                                       ),
@@ -201,7 +245,10 @@ class TaskCard extends StatelessWidget {
                                         style: TextStyle(
                                           fontSize: isWeb ? 16 : 12,
                                           fontWeight: FontWeight.w500,
-                                          color: task.dueAt!.isBefore(DateTime.now())
+                                          color:
+                                              task.dueAt!.isBefore(
+                                                DateTime.now(),
+                                              )
                                               ? Colors.red
                                               : Colors.blue,
                                         ),
@@ -209,7 +256,8 @@ class TaskCard extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                              if (task.assignedToUserName != null && task.assignedToUserName!.isNotEmpty)
+                              if (task.assignedToUserName != null &&
+                                  task.assignedToUserName!.isNotEmpty)
                                 Container(
                                   padding: EdgeInsets.symmetric(
                                     horizontal: isWeb ? 14 : 10,
@@ -217,9 +265,13 @@ class TaskCard extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.purple.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+                                    borderRadius: BorderRadius.circular(
+                                      isWeb ? 10 : 8,
+                                    ),
                                     border: Border.all(
-                                      color: Colors.purple.withValues(alpha: 0.3),
+                                      color: Colors.purple.withValues(
+                                        alpha: 0.3,
+                                      ),
                                     ),
                                   ),
                                   child: Row(
@@ -242,6 +294,7 @@ class TaskCard extends StatelessWidget {
                                     ],
                                   ),
                                 ),
+                              if (ownershipBadge != null) ownershipBadge,
                               Container(
                                 padding: EdgeInsets.symmetric(
                                   horizontal: isWeb ? 14 : 10,
@@ -249,7 +302,9 @@ class TaskCard extends StatelessWidget {
                                 ),
                                 decoration: BoxDecoration(
                                   color: statusColor.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+                                  borderRadius: BorderRadius.circular(
+                                    isWeb ? 10 : 8,
+                                  ),
                                   border: Border.all(
                                     color: statusColor.withValues(alpha: 0.4),
                                     width: 1,
@@ -274,7 +329,9 @@ class TaskCard extends StatelessWidget {
                             color: Colors.grey[600],
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
+                            borderRadius: BorderRadius.circular(
+                              isWeb ? 16 : 12,
+                            ),
                           ),
                           onSelected: onStatusChanged,
                           itemBuilder: (context) => AppConstants.allStatuses

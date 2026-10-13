@@ -18,11 +18,11 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT 
-    au.id,
-    au.email,
-    au.phone,
-    au.raw_user_meta_data,
-    au.created_at
+    au.id::UUID,
+    au.email::TEXT,
+    au.phone::TEXT,
+    au.raw_user_meta_data::JSONB,
+    au.created_at::TIMESTAMPTZ
   FROM auth.users au
   ORDER BY au.created_at DESC;
 END;
@@ -44,11 +44,11 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT 
-    au.id,
-    au.email,
-    au.phone,
-    au.raw_user_meta_data,
-    au.created_at
+    au.id::UUID,
+    au.email::TEXT,
+    au.phone::TEXT,
+    au.raw_user_meta_data::JSONB,
+    au.created_at::TIMESTAMPTZ
   FROM auth.users au
   WHERE au.id = user_id;
 END;

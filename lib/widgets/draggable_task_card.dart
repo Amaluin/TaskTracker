@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/constants.dart';
 import '../data/models/task_model.dart';
 
@@ -43,20 +44,58 @@ class DraggableTaskCard extends StatelessWidget {
     }
   }
 
+  Widget? _buildOwnershipBadge(bool isWeb) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) return null;
+
+    String? label;
+    Color color;
+    if (task.userId == currentUserId) {
+      label = 'Моя';
+      color = const Color(0xFF2563EB);
+    } else if (task.assignedToUserId == currentUserId) {
+      label = 'Назначена мне';
+      color = const Color(0xFF7C3AED);
+    } else {
+      return null;
+    }
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isWeb ? 14 : 10,
+        vertical: isWeb ? 8 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(isWeb ? 10 : 8),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: isWeb ? 15 : 12,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final priorityColor = _getPriorityColor();
     final statusColor = getStatusColor(task.status);
     final statusBgColor = getStatusBackgroundColor(task.status);
     final isWeb = kIsWeb;
-    
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // Используем ширину родителя для feedback
-        final feedbackWidth = constraints.maxWidth > 0 
-            ? constraints.maxWidth - (isWeb ? 12 : 8) // минус margin
+        final feedbackWidth = constraints.maxWidth > 0
+            ? constraints.maxWidth -
+                  (isWeb ? 12 : 8) // минус margin
             : (isWeb ? 320.0 : 280.0); // fallback ширина
-        
+
         return Draggable<TaskModel>(
           data: task,
           feedback: Material(
@@ -68,10 +107,7 @@ class DraggableTaskCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(isWeb ? 24 : 20),
-                border: Border.all(
-                  color: statusColor,
-                  width: isWeb ? 4 : 3,
-                ),
+                border: Border.all(color: statusColor, width: isWeb ? 4 : 3),
                 boxShadow: [
                   BoxShadow(
                     color: statusColor.withValues(alpha: 0.5),
@@ -80,12 +116,22 @@ class DraggableTaskCard extends StatelessWidget {
                   ),
                 ],
               ),
-              child: _buildCardContent(context, priorityColor, statusColor, isDragging: true),
+              child: _buildCardContent(
+                context,
+                priorityColor,
+                statusColor,
+                isDragging: true,
+              ),
             ),
           ),
           childWhenDragging: Opacity(
             opacity: 0.4,
-            child: _buildCard(context, priorityColor, statusColor, statusBgColor),
+            child: _buildCard(
+              context,
+              priorityColor,
+              statusColor,
+              statusBgColor,
+            ),
           ),
           child: _buildCard(context, priorityColor, statusColor, statusBgColor),
         );
@@ -93,12 +139,17 @@ class DraggableTaskCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCard(BuildContext context, Color priorityColor, Color statusColor, Color statusBgColor) {
+  Widget _buildCard(
+    BuildContext context,
+    Color priorityColor,
+    Color statusColor,
+    Color statusBgColor,
+  ) {
     final isWeb = kIsWeb;
-    
+
     return Container(
       margin: EdgeInsets.symmetric(
-        horizontal: isWeb ? 6 : 4, 
+        horizontal: isWeb ? 6 : 4,
         vertical: isWeb ? 8 : 6,
       ),
       child: ClipRRect(
@@ -134,10 +185,7 @@ class DraggableTaskCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      statusBgColor,
-                      Colors.white,
-                    ],
+                    colors: [statusBgColor, Colors.white],
                   ),
                   borderRadius: BorderRadius.circular(isWeb ? 24 : 20),
                 ),
@@ -151,9 +199,15 @@ class DraggableTaskCard extends StatelessWidget {
     );
   }
 
-  Widget _buildCardContent(BuildContext context, Color priorityColor, Color statusColor, {bool isDragging = false}) {
+  Widget _buildCardContent(
+    BuildContext context,
+    Color priorityColor,
+    Color statusColor, {
+    bool isDragging = false,
+  }) {
     final isWeb = kIsWeb;
-    
+    final ownershipBadge = _buildOwnershipBadge(isWeb);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -199,18 +253,12 @@ class DraggableTaskCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: priorityColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
-            border: Border.all(
-              color: priorityColor.withValues(alpha: 0.3),
-            ),
+            border: Border.all(color: priorityColor.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.flag,
-                size: isWeb ? 18 : 14,
-                color: priorityColor,
-              ),
+              Icon(Icons.flag, size: isWeb ? 18 : 14, color: priorityColor),
               SizedBox(width: isWeb ? 8 : 6),
               Text(
                 getPriorityDisplayName(task.priority),
@@ -276,7 +324,8 @@ class DraggableTaskCard extends StatelessWidget {
                   ],
                 ),
               ),
-            if (task.assignedToUserName != null && task.assignedToUserName!.isNotEmpty)
+            if (task.assignedToUserName != null &&
+                task.assignedToUserName!.isNotEmpty)
               Container(
                 padding: EdgeInsets.symmetric(
                   horizontal: isWeb ? 14 : 10,
@@ -309,6 +358,7 @@ class DraggableTaskCard extends StatelessWidget {
                   ],
                 ),
               ),
+            if (ownershipBadge != null) ownershipBadge,
             Container(
               padding: EdgeInsets.symmetric(
                 horizontal: isWeb ? 14 : 10,

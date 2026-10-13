@@ -20,6 +20,27 @@ DROP VIEW IF EXISTS tasks_with_reminder_count CASCADE;
 DROP VIEW IF EXISTS overdue_tasks CASCADE;
 DROP VIEW IF EXISTS upcoming_tasks CASCADE;
 
+-- Важно: перед изменением типа user_id удаляем все политики,
+-- которые могут зависеть от этой колонки
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT schemaname, tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('tasks', 'task_reminders', 'task_status_history')
+  LOOP
+    EXECUTE format(
+      'DROP POLICY IF EXISTS %I ON %I.%I',
+      pol.policyname,
+      pol.schemaname,
+      pol.tablename
+    );
+  END LOOP;
+END $$;
+
 -- Изменяем тип user_id с TEXT на UUID для совместимости с auth.users
 ALTER TABLE tasks ALTER COLUMN user_id TYPE UUID USING user_id::uuid;
 
@@ -157,6 +178,7 @@ CREATE POLICY "Users can insert own history"
 
 -- Обновляем функцию статистики
 DROP FUNCTION IF EXISTS get_user_task_stats(TEXT);
+DROP FUNCTION IF EXISTS get_user_task_stats(UUID);
 
 CREATE OR REPLACE FUNCTION get_user_task_stats(p_user_id UUID)
 RETURNS TABLE (
@@ -185,6 +207,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Обновляем функцию поиска
 DROP FUNCTION IF EXISTS search_tasks(TEXT, TEXT, INT);
+DROP FUNCTION IF EXISTS search_tasks(UUID, TEXT, INTEGER);
 
 CREATE OR REPLACE FUNCTION search_tasks(
   p_user_id UUID,
@@ -260,11 +283,13 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_phone ON user_profiles(phone);
 -- RLS для user_profiles
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON user_profiles;
 CREATE POLICY "Users can read own profile"
   ON user_profiles FOR SELECT
   TO authenticated
   USING (id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
 CREATE POLICY "Users can update own profile"
   ON user_profiles FOR UPDATE
   TO authenticated
@@ -280,13 +305,18 @@ BEGIN
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'phone', ''),
     COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'name', 'Пользователь')
-  );
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET
+    phone = EXCLUDED.phone,
+    display_name = EXCLUDED.display_name,
+    updated_at = NOW();
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created_profile ON auth.users;
+CREATE TRIGGER on_auth_user_created_profile
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION create_user_profile();

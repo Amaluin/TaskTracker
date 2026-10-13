@@ -135,22 +135,23 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
       if (_dueDate != null && mounted) {
         try {
           print('📅 Создаём напоминание на: $_dueDate');
-          final user = Supabase.instance.client.auth.currentUser;
-          if (user != null) {
-            final reminder = TaskReminderModel(
-              id: const Uuid().v4(),
-              taskId: task.id,
-              userId: user.id,
-              remindAt: _dueDate!,
-              type: AppConstants.reminderTypeNotification,
-              enabled: true,
-              createdAt: now,
+          final reminder = TaskReminderModel(
+            id: const Uuid().v4(),
+            taskId: task.id,
+            userId: assignedUserId,
+            remindAt: _dueDate!,
+            type: AppConstants.reminderTypeNotification,
+            enabled: true,
+            createdAt: now,
+          );
+
+          print('💾 Сохраняем напоминание в БД: ${reminder.id}');
+          await ref.read(remindersProvider.notifier).addReminder(reminder);
+
+          if (assignedUserId == currentUserId) {
+            print(
+              '🔔 Планируем локальное уведомление для текущего пользователя',
             );
-
-            print('💾 Сохраняем напоминание в БД: ${reminder.id}');
-            await ref.read(remindersProvider.notifier).addReminder(reminder);
-
-            print('🔔 Планируем уведомление');
             await NotificationService().scheduleNotification(
               id: reminder.id.hashCode,
               title: task.title,
@@ -166,20 +167,24 @@ class _CreateTaskScreenState extends ConsumerState<CreateTaskScreen> {
                 taskTitle: task.title,
               );
             }
+          } else {
+            print(
+              'ℹ️ Ответственный другой пользователь ($assignedUserId), локальное уведомление на этом устройстве не планируем',
+            );
+          }
 
-            print('✅ Напоминание создано успешно');
+          print('✅ Напоминание создано успешно');
 
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Напоминание установлено на ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year} ${_dueDate!.hour}:${_dueDate!.minute.toString().padLeft(2, '0')}',
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 2),
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Напоминание установлено на ${_dueDate!.day}.${_dueDate!.month}.${_dueDate!.year} ${_dueDate!.hour}:${_dueDate!.minute.toString().padLeft(2, '0')}',
                 ),
-              );
-            }
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
           }
         } catch (reminderError) {
           print('❌ Ошибка создания напоминания: $reminderError');

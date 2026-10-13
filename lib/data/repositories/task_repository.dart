@@ -12,7 +12,10 @@ class TaskRepository {
     final userId = _getUserId();
     if (userId == null) throw Exception('User not authenticated');
 
-    var query = _client.from('tasks').select().eq('user_id', userId);
+    var query = _client
+        .from('tasks')
+        .select()
+        .or('user_id.eq.$userId,assigned_to_user_id.eq.$userId');
 
     if (status != null) {
       query = query.eq('status', status);
@@ -26,16 +29,13 @@ class TaskRepository {
   }
 
   Future<List<TaskModel>> searchTasks(String queryStr) async {
-    final userId = _getUserId();
-    if (userId == null) throw Exception('User not authenticated');
-
-    final data = await _client
-        .from('tasks')
-        .select()
-        .eq('user_id', userId)
-        .or('title.ilike.%$queryStr%,description.ilike.%$queryStr%')
-        .order('created_at', ascending: false);
-    return (data as List).map((e) => TaskModel.fromJson(e)).toList();
+    final tasks = await getTasks();
+    final normalized = queryStr.trim().toLowerCase();
+    return tasks.where((task) {
+      final title = task.title.toLowerCase();
+      final description = task.description?.toLowerCase() ?? '';
+      return title.contains(normalized) || description.contains(normalized);
+    }).toList();
   }
 
   Future<TaskModel> createTask(TaskModel task) async {
@@ -85,7 +85,7 @@ class TaskRepository {
     final data = await _client
         .from('tasks')
         .select()
-        .eq('user_id', userId)
+        .or('user_id.eq.$userId,assigned_to_user_id.eq.$userId')
         .gte('due_at', start.toIso8601String())
         .lte('due_at', end.toIso8601String())
         .order('due_at', ascending: true);

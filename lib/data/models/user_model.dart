@@ -16,13 +16,17 @@ class UserModel {
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final metadata = json['raw_user_meta_data'] as Map<String, dynamic>?;
+    final createdAtRaw = json['created_at'] as String?;
     return UserModel(
-      id: json['id'] as String,
-      email: json['email'] as String,
+      id: (json['id'] as String?) ?? '',
+      email: (json['email'] as String?) ?? '',
       phone: json['phone'] as String?,
-      name: json['raw_user_meta_data']?['name'] as String?,
-      displayName: json['raw_user_meta_data']?['display_name'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      name: metadata?['name'] as String?,
+      displayName: metadata?['display_name'] as String?,
+      createdAt: createdAtRaw != null
+          ? DateTime.parse(createdAtRaw)
+          : DateTime.now(),
     );
   }
 

@@ -41,7 +41,6 @@ class NotificationService {
   static const String _alarmChannelName = 'Task reminders';
   static const String _alarmChannelDescription =
       'Task Tracker reminder notifications with sound';
-  static const String _androidNotificationIcon = 'ic_notification_task';
   static const String _androidPackageName = 'com.tasktracker.task_tracker';
 
   final FlutterLocalNotificationsPlugin _plugin;
@@ -151,7 +150,7 @@ class NotificationService {
   Future<void> _initializeAndroid() async {
     _log('android-init', 'start');
     const androidSettings = AndroidInitializationSettings(
-      '@drawable/ic_notification_task',
+      '@mipmap/ic_launcher',
     );
     const initSettings = InitializationSettings(android: androidSettings);
 
@@ -162,12 +161,10 @@ class NotificationService {
     _log('android-init', 'plugin initialized');
 
     await _createAndroidNotificationChannels();
-
-    // Запрашиваем разрешение на уведомления для Android 13+
-    await _requestNotificationPermission();
-
-    // Запрашиваем разрешение на точные будильники для Android 12+
-    await _requestExactAlarmPermission();
+    _log(
+      'android-init',
+      'skip permission prompts during startup (requested from UI flow)',
+    );
     _log('android-init', 'completed');
   }
 
@@ -197,35 +194,8 @@ class NotificationService {
     }
   }
 
-  Future<void> _requestExactAlarmPermission() async {
-    if (_isAndroid) {
-      try {
-        _log('permission-exact-alarm', 'check start');
-        final androidPlugin = _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-
-        if (androidPlugin != null) {
-          final canScheduleExactAlarms = await androidPlugin
-              .canScheduleExactNotifications();
-          _log(
-            'permission-exact-alarm',
-            'canScheduleExactNotifications=$canScheduleExactAlarms',
-          );
-
-          if (canScheduleExactAlarms == false) {
-            _log('permission-exact-alarm', 'request exact alarm permission');
-            final granted = await androidPlugin.requestExactAlarmsPermission();
-            _log('permission-exact-alarm', 'request result: $granted');
-          }
-        } else {
-          _log('permission-exact-alarm', 'android plugin unavailable');
-        }
-      } catch (e) {
-        _logError('permission-exact-alarm', e);
-      }
-    }
+  Future<void> requestNotificationPermission() async {
+    await _requestNotificationPermission();
   }
 
   Future<void> _initializeIOS() async {
@@ -518,7 +488,6 @@ class NotificationService {
         _alarmChannelId,
         _alarmChannelName,
         channelDescription: _alarmChannelDescription,
-        icon: _androidNotificationIcon,
         importance: Importance.max,
         priority: Priority.high,
         enableVibration: true,
@@ -528,6 +497,7 @@ class NotificationService {
       );
 
       const details = NotificationDetails(android: androidDetails);
+      final scheduleMode = await _resolveAndroidScheduleMode();
 
       await _plugin.zonedSchedule(
         id,
@@ -535,12 +505,15 @@ class NotificationService {
         body,
         tzScheduledDate,
         details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: scheduleMode,
         payload: payload,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-      _log('schedule-android', 'zonedSchedule completed id=$id');
+      _log(
+        'schedule-android',
+        'zonedSchedule completed id=$id mode=$scheduleMode',
+      );
     } else if (_isIOS) {
       // iOS: используем локальные уведомления с звуком
       const iosDetails = DarwinNotificationDetails(
@@ -568,13 +541,33 @@ class NotificationService {
     }
   }
 
+  Future<AndroidScheduleMode> _resolveAndroidScheduleMode() async {
+    final androidPlugin = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (androidPlugin == null) {
+      _log('schedule-android', 'android plugin unavailable, use inexact');
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
+
+    try {
+      final canExact = await androidPlugin.canScheduleExactNotifications();
+      _log('schedule-android', 'canScheduleExactNotifications=$canExact');
+      if (canExact == true) return AndroidScheduleMode.exactAllowWhileIdle;
+    } catch (e, st) {
+      _logError('schedule-android', e, st);
+    }
+    _log('schedule-android', 'fallback to inexactAllowWhileIdle');
+    return AndroidScheduleMode.inexactAllowWhileIdle;
+  }
+
   @visibleForTesting
   NotificationDetails buildAndroidNotificationDetails() {
     const androidDetails = AndroidNotificationDetails(
       _alarmChannelId,
       _alarmChannelName,
       channelDescription: _alarmChannelDescription,
-      icon: _androidNotificationIcon,
       importance: Importance.max,
       priority: Priority.high,
       enableVibration: true,
@@ -623,9 +616,28 @@ class NotificationService {
 
   Future<bool> areNotificationsEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    final enabled = prefs.getBool('notifications_enabled') ?? true;
-    _log('prefs', 'notifications_enabled=$enabled');
-    return enabled;
+    final appEnabled = prefs.getBool('notifications_enabled') ?? true;
+    if (!appEnabled) {
+      _log('prefs', 'notifications_enabled=false (app setting)');
+      return false;
+    }
+
+    if (_isAndroid) {
+      try {
+        final androidPlugin = _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        final osEnabled = await androidPlugin?.areNotificationsEnabled();
+        _log('prefs', 'notifications_enabled app=true os=$osEnabled');
+        return osEnabled ?? true;
+      } catch (e, st) {
+        _logError('prefs', e, st);
+      }
+    }
+
+    _log('prefs', 'notifications_enabled app=true');
+    return true;
   }
 
   // Получить информацию о платформе

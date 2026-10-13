@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -31,9 +32,14 @@ void main() async {
     anonKey: AppConstants.supabaseAnonKey,
   );
 
-  await NotificationService().initialize();
-
   runApp(const ProviderScope(child: TaskTrackerApp()));
+
+  unawaited(
+    NotificationService().initialize().catchError((error, stack) {
+      debugPrint('⚠️ NotificationService init failed: $error');
+      debugPrint('$stack');
+    }),
+  );
 }
 
 class TaskTrackerApp extends StatelessWidget {
@@ -45,7 +51,7 @@ class TaskTrackerApp extends StatelessWidget {
     final isWeb = kIsWeb;
     final baseFontSize = isWeb ? 18.0 : 14.0;
     final titleFontSize = isWeb ? 26.0 : 20.0;
-    
+
     return GestureDetector(
       onTap: () {
         // Скрываем клавиатуру при тапе на свободную область
@@ -55,149 +61,142 @@ class TaskTrackerApp extends StatelessWidget {
       child: MaterialApp(
         title: AppConstants.appName,
         debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('ru', 'RU'),
-        Locale('en', 'US'),
-      ],
-      locale: const Locale('ru', 'RU'),
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(isWeb ? 24 : 20),
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ru', 'RU'), Locale('en', 'US')],
+        locale: const Locale('ru', 'RU'),
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF6366F1),
+            brightness: Brightness.light,
           ),
-          color: Colors.white.withValues(alpha: 0.7),
-        ),
-        appBarTheme: AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          foregroundColor: const Color(0xFF1F2937),
-          systemOverlayStyle: const SystemUiOverlayStyle(
-            statusBarColor: Color(0xFFF5F7FA),
-            statusBarIconBrightness: Brightness.dark,
-            statusBarBrightness: Brightness.dark,
-          ),
-          titleTextStyle: TextStyle(
-            color: const Color(0xFF1F2937),
-            fontSize: titleFontSize,
-            fontWeight: FontWeight.w600,
-          ),
-          iconTheme: IconThemeData(
-            size: isWeb ? 28 : 24,
-          ),
-        ),
-        floatingActionButtonTheme: FloatingActionButtonThemeData(
-          elevation: 8,
-          backgroundColor: const Color(0xFF6366F1),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
-          ),
-          extendedTextStyle: TextStyle(
-            fontSize: isWeb ? 18 : 14,
-            fontWeight: FontWeight.w600,
-          ),
-          extendedIconLabelSpacing: isWeb ? 12 : 8,
-          extendedPadding: EdgeInsets.symmetric(
-            horizontal: isWeb ? 28 : 20,
-            vertical: isWeb ? 18 : 12,
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.8),
-          hintStyle: TextStyle(
-            color: Colors.grey.shade400,
-            fontSize: baseFontSize,
-          ),
-          labelStyle: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: baseFontSize,
-          ),
-          floatingLabelStyle: TextStyle(
-            color: Colors.grey.shade600,
-            fontSize: baseFontSize,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
-            borderSide: BorderSide(
-              color: const Color(0xFF6366F1), 
-              width: isWeb ? 3 : 2,
+          useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFFF5F7FA),
+          cardTheme: CardThemeData(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(isWeb ? 24 : 20),
             ),
+            color: Colors.white.withValues(alpha: 0.7),
           ),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: isWeb ? 24 : 20, 
-            vertical: isWeb ? 20 : 16,
-          ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF6366F1),
-            foregroundColor: Colors.white,
-            padding: EdgeInsets.symmetric(
-              vertical: isWeb ? 20 : 16, 
-              horizontal: isWeb ? 32 : 24,
+          appBarTheme: AppBarTheme(
+            centerTitle: true,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            foregroundColor: const Color(0xFF1F2937),
+            systemOverlayStyle: const SystemUiOverlayStyle(
+              statusBarColor: Color(0xFFF5F7FA),
+              statusBarIconBrightness: Brightness.dark,
+              statusBarBrightness: Brightness.dark,
             ),
-            textStyle: TextStyle(
-              fontSize: isWeb ? 18 : 16,
+            titleTextStyle: TextStyle(
+              color: const Color(0xFF1F2937),
+              fontSize: titleFontSize,
               fontWeight: FontWeight.w600,
             ),
+            iconTheme: IconThemeData(size: isWeb ? 28 : 24),
+          ),
+          floatingActionButtonTheme: FloatingActionButtonThemeData(
+            elevation: 8,
+            backgroundColor: const Color(0xFF6366F1),
+            foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
             ),
-            elevation: 4,
-            minimumSize: Size(isWeb ? 120 : 88, isWeb ? 56 : 48),
+            extendedTextStyle: TextStyle(
+              fontSize: isWeb ? 18 : 14,
+              fontWeight: FontWeight.w600,
+            ),
+            extendedIconLabelSpacing: isWeb ? 12 : 8,
+            extendedPadding: EdgeInsets.symmetric(
+              horizontal: isWeb ? 28 : 20,
+              vertical: isWeb ? 18 : 12,
+            ),
           ),
-        ),
-        chipTheme: ChipThemeData(
-          backgroundColor: Colors.white.withValues(alpha: 0.6),
-          selectedColor: const Color(0xFF6366F1).withValues(alpha: 0.2),
-          labelStyle: TextStyle(
-            color: const Color(0xFF1F2937),
-            fontSize: baseFontSize,
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.8),
+            hintStyle: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: baseFontSize,
+            ),
+            labelStyle: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: baseFontSize,
+            ),
+            floatingLabelStyle: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: baseFontSize,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
+              borderSide: BorderSide(
+                color: const Color(0xFF6366F1),
+                width: isWeb ? 3 : 2,
+              ),
+            ),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: isWeb ? 24 : 20,
+              vertical: isWeb ? 20 : 16,
+            ),
           ),
-          padding: EdgeInsets.symmetric(
-            horizontal: isWeb ? 16 : 12, 
-            vertical: isWeb ? 10 : 8,
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(
+                vertical: isWeb ? 20 : 16,
+                horizontal: isWeb ? 32 : 24,
+              ),
+              textStyle: TextStyle(
+                fontSize: isWeb ? 18 : 16,
+                fontWeight: FontWeight.w600,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(isWeb ? 20 : 16),
+              ),
+              elevation: 4,
+              minimumSize: Size(isWeb ? 120 : 88, isWeb ? 56 : 48),
+            ),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
+          chipTheme: ChipThemeData(
+            backgroundColor: Colors.white.withValues(alpha: 0.6),
+            selectedColor: const Color(0xFF6366F1).withValues(alpha: 0.2),
+            labelStyle: TextStyle(
+              color: const Color(0xFF1F2937),
+              fontSize: baseFontSize,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: isWeb ? 16 : 12,
+              vertical: isWeb ? 10 : 8,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(isWeb ? 16 : 12),
+            ),
           ),
+          textTheme: TextTheme(
+            bodySmall: TextStyle(fontSize: isWeb ? 16 : 12),
+            bodyMedium: TextStyle(fontSize: baseFontSize),
+            bodyLarge: TextStyle(fontSize: isWeb ? 20 : 16),
+            titleSmall: TextStyle(fontSize: baseFontSize),
+            titleMedium: TextStyle(fontSize: isWeb ? 20 : 16),
+            titleLarge: TextStyle(fontSize: isWeb ? 24 : 20),
+          ),
+          iconTheme: IconThemeData(size: isWeb ? 26 : 20),
         ),
-        textTheme: TextTheme(
-          bodySmall: TextStyle(fontSize: isWeb ? 16 : 12),
-          bodyMedium: TextStyle(fontSize: baseFontSize),
-          bodyLarge: TextStyle(fontSize: isWeb ? 20 : 16),
-          titleSmall: TextStyle(fontSize: baseFontSize),
-          titleMedium: TextStyle(fontSize: isWeb ? 20 : 16),
-          titleLarge: TextStyle(fontSize: isWeb ? 24 : 20),
-        ),
-        iconTheme: IconThemeData(
-          size: isWeb ? 26 : 20,
-        ),
+        home: const EntryWrapper(),
       ),
-      home: const EntryWrapper(),
-    ),
     );
   }
 }
@@ -209,7 +208,8 @@ class EntryWrapper extends StatefulWidget {
   State<EntryWrapper> createState() => _EntryWrapperState();
 }
 
-class _EntryWrapperState extends State<EntryWrapper> with WidgetsBindingObserver {
+class _EntryWrapperState extends State<EntryWrapper>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -294,6 +294,7 @@ class _MainScreenState extends State<MainScreen> {
     _hasShownPermissionDialog = true;
 
     final notificationService = NotificationService();
+    await notificationService.requestNotificationPermission();
     final hasPermission = await notificationService.hasExactAlarmPermission();
 
     // Показываем полный диалог если нет разрешения на будильники

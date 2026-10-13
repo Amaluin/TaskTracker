@@ -141,18 +141,25 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
 
     // Обновляем статус на "В работе"
+    final userName =
+        user.userMetadata?['display_name'] as String? ??
+        user.userMetadata?['name'] as String? ??
+        user.email ??
+        'Пользователь';
     final updatedTask = widget.task.copyWith(
       status: AppConstants.statusAccepted,
+      assignedToUserId: user.id,
+      assignedToUserName: userName,
     );
     await ref.read(tasksProvider.notifier).updateTask(updatedTask);
 
     // Создаем напоминание на срок выполнения, если он установлен
-    if (widget.task.dueAt != null) {
+    if (updatedTask.dueAt != null) {
       final reminder = TaskReminderModel(
         id: const Uuid().v4(),
         taskId: widget.task.id,
         userId: user.id,
-        remindAt: widget.task.dueAt!.subtract(const Duration(hours: 1)),
+        remindAt: updatedTask.dueAt!.subtract(const Duration(hours: 1)),
         type: AppConstants.reminderTypeNotification,
         enabled: true,
         createdAt: DateTime.now(),
